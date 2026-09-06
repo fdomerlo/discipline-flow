@@ -1,6 +1,6 @@
-# Disciplined Scaffold
+# Discipline Flow
 
-Un arnés de **Desarrollo Guiado por Especificaciones (SDD)** y control de ejecución para agentes de código en terminal (Claude Code, Antigravity, Gemini CLI, Cursor, OpenCode).
+Arnés de **Desarrollo Guiado por Especificaciones (SDD)** y control de ejecución para agentes de código (Claude Code, Antigravity, Cursor, OpenCode).
 
 Cero dependencias. Cero herramientas en segundo plano. Cero bases de datos de estado. Todo el control se ejerce mediante contratos de prosa estructurada, anclaje en Git y verificación automatizada en tests.
 
@@ -13,10 +13,10 @@ Cuando un agente de IA programa sin restricciones formales, suele presentar tres
 2. **Sesgo de complacencia:** Tilda tareas como completadas porque "asume" que el código funciona, sin haber probado los casos de borde.
 3. **Amnesia y saturación de contexto:** Tras pausar una sesión o alcanzar el límite de tokens, la siguiente sesión arranca a ciegas, adivinando el estado del repositorio o duplicando trabajo.
 
-**Disciplined Scaffold** impone una estructura de trabajo rigurosa donde:
+**Discipline Flow** impone una estructura de trabajo rigurosa donde:
 * **El plan es la especificación:** El trabajo se divide en fases atómicas con alcance cerrado.
 * **Los criterios se demuestran con código (`CRIT-XX`):** Ninguna tarea se da por cumplida sin un test en verde que lleve su etiqueta.
-* **La memoria entre sesiones es persistente y quirúrgica (`SESSION.md`):** Se retoma el trabajo en segundos sin releer historiales muertos de chat.
+* **La memoria entre sesiones es persistente (`SESSION.md`):** Se retoma el trabajo en segundos sin releer historiales muertos de chat.
 * **El humano audita el diff:** Cada fase termina con un freno obligatorio antes de tocar la rama principal.
 
 ---
@@ -25,33 +25,11 @@ Cuando un agente de IA programa sin restricciones formales, suele presentar tres
 
 El sistema desacopla responsabilidades en tres capas complementarias:
 
-
-```
-
-┌─────────────────────────────────────────────────────────────┐
-│                          AGENTS.md                          │
-│        Reglas de conducta, restricciones y protocolo        │
-└──────────────────────────────┬──────────────────────────────┘
-│ gobierna
-▼
-┌─────────────────────────────────────────────────────────────┐
-│                          PLAN-N.md                          │
-│        Especificación inmutable, fases y criterios CRIT     │
-└──────────────────────────────┬──────────────────────────────┘
-│ rastrea
-▼
-┌─────────────────────────────────────────────────────────────┐
-│                         SESSION.md                          │
-│         Cursor de reanudación y anclaje con Git HEAD        │
-└─────────────────────────────────────────────────────────────┘
-
-```
-
-| Archivo | Rol | Mutabilidad |
-| :--- | :--- | :--- |
-| **`AGENTS.md`** | **Constitución:** Define cómo debe comportarse el agente, qué comandos puede correr y las reglas de detención obligatoria. | Estático |
-| **`PLAN-N.md`** | **Especificación (SDD):** Define qué se construye, qué queda explícitamente fuera de alcance y los criterios de aceptación. | Estable por ciclo |
-| **`SESSION.md`** | **Memoria Táctica:** Guarda el punto exacto de interrupción, el commit base y la siguiente acción inmediata. | Altamente dinámico |
+| Archivo | Capa | Rol | Mutabilidad |
+| :--- | :--- | :--- | :--- |
+| **`AGENTS.md`** | Constitución | Define cómo debe comportarse el agente, qué comandos puede correr y las reglas de detención obligatoria. | Estático |
+| **`PLAN-N.md`** | Especificación | Define qué se construye, qué queda explícitamente fuera de alcance y los criterios de aceptación. | Estable por ciclo |
+| **`SESSION.md`** | Memoria | Guarda el punto exacto de interrupción, el commit base y la siguiente acción inmediata. | Altamente dinámico |
 
 ---
 
@@ -92,20 +70,20 @@ Si la historia de Git divergió (rebase, reset, force-push), el agente se detien
 Ante cualquier discrepancia en el repositorio, rige este orden de precedencia:
 
 ```text
-Git Reality (código y working tree) > PLAN-N.md (especificación) > SESSION.md (memoria)
+Git (código y working tree) > PLAN-N.md (especificación) > SESSION.md (memoria)
 
 ```
 
-Si la memoria del agente contradice los archivos en disco, manda el disco. Si el código requiere violar el plan, el agente se detiene y pide una enmienda formal.
+Si la memoria del agente contradice los archivos en disco, manda el disco. Si el código requiere violar el plan, el agente se detiene y pide una corrección formal.
 
 ---
 
 ## 4. Estructura del Repositorio de la Skill
 
 ```text
-disciplined-scaffold/
+discipline-flow/
 ├── SKILL.md                      # Definición formal de la skill y entry points
-├── README.md                     # Documentación de referencia
+├── README.md                     # Este documento
 ├── assets/
 │   ├── AGENTS.md.template        # Plantilla del contrato operativo
 │   ├── PLAN.md.template          # Plantilla de especificación SDD con CRIT-XX
@@ -169,7 +147,7 @@ Al completar los criterios de la fase:
 
 ## 6. Alcance Honesto y Garantías
 
-* **Es un arnés basado en contratos:** Funciona instruyendo al agente con reglas operativas inequívocas y validaciones en la terminal.
+* **Es un arnés basado en contratos:** Funciona instruyendo al agente con reglas operativas inequívocas y validaciones humanas.
 * **Sin bloqueos de software pesados:** No introduce demonios en segundo plano, locks distribuidos ni parsers de AST. La rigidez la aportan Git y los tests del propio proyecto.
 * **Resiliencia ante fallos:** No promete transaccionalidad matemática ACID, pero reduce en más de un 90% el retrabajo y la pérdida de rumbo habitual en agentes autónomos.
 
