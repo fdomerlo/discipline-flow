@@ -15,7 +15,11 @@ Options:
 - `--with-hook`: Automatically installs and activates `.git/hooks/commit-msg`.
 - `-p, --project-name`: Explicit project name (defaults to target directory name).
 - `-d, --target-dir`: Target repository root (defaults to `.`).
-- `-f, --force`: Overwrite existing contract files if re-initializing.
+- `-f, --force`: Overwrite existing contract files completely (by default, `init.sh` safely appends/updates the delimited block).
+
+**Handling pre-existing `AGENTS.md` and `CLAUDE.md`:**
+- If `AGENTS.md` exists, `init.sh` appends the Discipline Flow contract inside managed delimiters (`<!-- BEGIN DISCIPLINE-FLOW -->` ... `<!-- END DISCIPLINE-FLOW -->`), preserving all pre-existing project rules. If re-run, it updates only that section in place.
+- If `CLAUDE.md` exists, `init.sh` appends `@AGENTS.md` if not already present.
 
 ### Option 2 — Manual step-by-step (Fallback)
 
@@ -28,14 +32,12 @@ Options:
      out to use `unittest` or `go test`).
    - `{{COMMIT_TYPES}}` — default: `feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release`.
      Ask only if the project has an existing convention to match.
-3. Write the filled template to `AGENTS.md` at the repo root. This is the
-   single source of truth — OpenCode, Antigravity, Codex and Cursor read
-   it natively.
-4. Write `CLAUDE.md` at the repo root containing exactly one line:
-
-   ```
-   @AGENTS.md
-   ```
+3. Write or append to `AGENTS.md` at the repo root:
+   - If `AGENTS.md` does not exist: write the filled template directly.
+   - If `AGENTS.md` already exists: do NOT overwrite it. Append the filled template enclosed between `<!-- BEGIN DISCIPLINE-FLOW -->` and `<!-- END DISCIPLINE-FLOW -->` at the end of the file.
+4. Set up `CLAUDE.md` at the repo root:
+   - If `CLAUDE.md` does not exist: create it with `@AGENTS.md`.
+   - If `CLAUDE.md` exists: ensure it includes `@AGENTS.md` (append if missing).
 
    Claude Code uses `CLAUDE.md` as its entry point; this `@AGENTS.md`
    import is Anthropic's documented pattern to include external markdown

@@ -1,9 +1,9 @@
 ---
-name: disciplined-scaffold
+name: discipline-flow
 description: Bootstraps repositories with an AI executor contract (AGENTS.md, conventional commits hook) or scaffolds structured, phased PLAN-N.md cycles with human audit between phases. Trigger when starting a new project, setting up commit conventions, breaking multi-session work into phases, or closing an execution phase.
 ---
 
-# Disciplined Scaffold
+# Discipline Flow
 
 Packages a pattern for working with AI coding agents across multiple
 sessions without losing discipline: conventional commits, one phase per
@@ -58,11 +58,11 @@ act — same principle the contract itself enforces on the executor.
 
 ## Files this skill writes and tools included
 
-- `scripts/init.sh` — automated CLI runner that bootstraps `AGENTS.md`, `CLAUDE.md`, and the git hook in one deterministic step.
+- `scripts/init.sh` — automated CLI runner that bootstraps `AGENTS.md`, `CLAUDE.md`, and the git hook in one deterministic step (with safe append for pre-existing contracts).
 - `scripts/new-plan.sh` — helper script that scaffolds the next unused `PLAN-N.md` (or `plans/PLAN-N.md`) with title and phase template.
 - `AGENTS.md` at repo root (bootstrap) — from `assets/AGENTS.md.template`.
   **Single source of truth**, read natively by OpenCode, Antigravity,
-  Codex, Cursor and others.
+  Codex, Cursor and others. Appended cleanly within managed markers (`<!-- BEGIN DISCIPLINE-FLOW -->`) if an `AGENTS.md` already exists.
 - `CLAUDE.md` at repo root — one line: `@AGENTS.md`. Claude Code does not
   read `AGENTS.md` natively; this import is Anthropic's documented pattern
   and, unlike a symlink, works on Windows without special permissions.

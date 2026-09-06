@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/init.sh — Bootstrap repository with disciplined-scaffold conventions
+# scripts/init.sh — Bootstrap repository with discipline-flow conventions
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,8 +25,14 @@ Options:
   -d, --target-dir <path>      Target directory to bootstrap (default: current directory ".")
       --with-hook              Install .git/hooks/commit-msg
       --no-hook                Skip git hook installation (default)
-  -f, --force                  Overwrite existing AGENTS.md and CLAUDE.md files
+  -f, --force                  Overwrite existing AGENTS.md and CLAUDE.md files (default: safe append/update)
   -h, --help                   Show this help message
+
+Behavior with pre-existing AGENTS.md:
+  By default, init.sh preserves any pre-existing AGENTS.md by appending the Discipline Flow
+  contract inside delimited markers (<!-- BEGIN DISCIPLINE-FLOW -->). If the markers already
+  exist, it updates that section in-place without touching your custom instructions.
+  Use --force to completely replace the file.
 
 Examples:
   $(basename "$0") -t "pytest" --with-hook
@@ -111,29 +117,58 @@ fi
 AGENTS_TARGET="$TARGET_DIR/AGENTS.md"
 CLAUDE_TARGET="$TARGET_DIR/CLAUDE.md"
 
-# Safety checks for existing files
-if [[ -f "$AGENTS_TARGET" && "$FORCE" != true ]]; then
-  echo "Error: '$AGENTS_TARGET' already exists. Use --force to overwrite." >&2
-  exit 1
-fi
-
-if [[ -f "$CLAUDE_TARGET" && "$FORCE" != true ]]; then
-  echo "Error: '$CLAUDE_TARGET' already exists. Use --force to overwrite." >&2
-  exit 1
-fi
-
-# Generate AGENTS.md from template safely without sed delimiter collision
+# Generate content from template safely
 content="$(<"$TEMPLATE_FILE")"
 content="${content//\{\{PROJECT_NAME\}\}/$PROJECT_NAME}"
 content="${content//\{\{TEST_COMMAND\}\}/$TEST_COMMAND}"
 content="${content//\{\{COMMIT_TYPES\}\}/$COMMIT_TYPES}"
 
-printf '%s\n' "$content" > "$AGENTS_TARGET"
-echo "Created: $AGENTS_TARGET"
+START_MARKER="<!-- BEGIN DISCIPLINE-FLOW -->"
+END_MARKER="<!-- END DISCIPLINE-FLOW -->"
 
-# Generate CLAUDE.md
-printf '@AGENTS.md\n' > "$CLAUDE_TARGET"
-echo "Created: $CLAUDE_TARGET (pointing to @AGENTS.md)"
+# Manage AGENTS.md (Safe append / update / create)
+if [[ ! -f "$AGENTS_TARGET" ]]; then
+  printf '%s\n' "$content" > "$AGENTS_TARGET"
+  echo "Created: $AGENTS_TARGET"
+elif [[ "$FORCE" == true ]]; then
+  printf '%s\n' "$content" > "$AGENTS_TARGET"
+  echo "Overwritten (--force): $AGENTS_TARGET"
+else
+  if grep -q "$START_MARKER" "$AGENTS_TARGET"; then
+    python3 -c '
+import sys
+content, target, start, end = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+with open(target, "r", encoding="utf-8") as f:
+    text = f.read()
+if start in text and end in text:
+    pre = text.split(start)[0]
+    post = text.split(end, 1)[1]
+    new_text = pre.rstrip() + "\n\n" + content.strip() + "\n" + post.lstrip("\n")
+    with open(target, "w", encoding="utf-8") as f:
+        f.write(new_text)
+' "$content" "$AGENTS_TARGET" "$START_MARKER" "$END_MARKER"
+    echo "Updated existing Discipline Flow contract block in: $AGENTS_TARGET"
+  else
+    printf '\n\n%s\n' "$content" >> "$AGENTS_TARGET"
+    echo "Appended Discipline Flow contract to existing: $AGENTS_TARGET (preserved custom rules)"
+  fi
+fi
+
+# Manage CLAUDE.md (Safe create / append)
+if [[ ! -f "$CLAUDE_TARGET" ]]; then
+  printf '@AGENTS.md\n' > "$CLAUDE_TARGET"
+  echo "Created: $CLAUDE_TARGET (pointing to @AGENTS.md)"
+elif [[ "$FORCE" == true ]]; then
+  printf '@AGENTS.md\n' > "$CLAUDE_TARGET"
+  echo "Overwritten (--force): $CLAUDE_TARGET (pointing to @AGENTS.md)"
+else
+  if grep -q '@AGENTS.md' "$CLAUDE_TARGET"; then
+    echo "Notice: $CLAUDE_TARGET already references @AGENTS.md"
+  else
+    printf '\n@AGENTS.md\n' >> "$CLAUDE_TARGET"
+    echo "Appended: @AGENTS.md reference to existing $CLAUDE_TARGET"
+  fi
+fi
 
 # Install commit-msg hook if requested
 if [[ "$INSTALL_HOOK" == true ]]; then
@@ -163,4 +198,3 @@ echo "Claude import: $CLAUDE_TARGET"
 if [[ "$INSTALL_HOOK" == true ]]; then
   echo "Commit hook:   $TARGET_DIR/.git/hooks/commit-msg"
 fi
-

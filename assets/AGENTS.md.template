@@ -1,4 +1,5 @@
-# {{PROJECT_NAME}} — contributor & executor contract
+<!-- BEGIN DISCIPLINE-FLOW -->
+# {{PROJECT_NAME}} — Contributor & Executor Contract (Discipline Flow)
 
 ## Always
 
@@ -82,3 +83,4 @@ more.
 - The full existing test suite: green.
 - No scope creep — anything tempting-but-tangential goes in the plan's
   "out of scope" section for a future cycle, not into this diff.
+<!-- END DISCIPLINE-FLOW -->
