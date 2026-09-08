@@ -58,6 +58,7 @@ act — same principle the contract itself enforces on the executor.
 
 ## Files this skill writes and tools included
 
+- `scripts/verify-crit.sh` — deterministic CLI gate that parses `PLAN-N.md`, enforces 1:1 `CRIT-XX` traceability against test files, executes the test suite, and generates the audit verification table.
 - `scripts/init.sh` — automated CLI runner that bootstraps `AGENTS.md`, `CLAUDE.md`, and the git hook in one deterministic step (with safe append for pre-existing contracts).
 - `scripts/new-plan.sh` — helper script that scaffolds the next unused `PLAN-N.md` (or `plans/PLAN-N.md`) with title and phase template.
 - `AGENTS.md` at repo root (bootstrap) — from `assets/AGENTS.md.template`.

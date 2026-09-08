@@ -10,66 +10,43 @@ could not see.
 
 Runs when a phase's work is done, **before** anyone starts the next one.
 
-### Tick the boxes — but only what you can demonstrate
+### 1. Deterministic Verification Gate (Mandatory)
 
-Go through that phase's acceptance criteria in `PLAN-N.md` and mark
-`- [ ]` → `- [x]` for each one that is **demonstrably** met. The word is
-load-bearing:
+Before writing any report or updating state, you MUST run the verification script:
 
-- A criterion backed by a test: the test exists, its function or test block
-  name contains the matching `CRIT-XX` identifier (e.g. `test('CRIT-01: ...')`
-  or `def test_crit_01_...()`), and it passes *now*, in this working tree — you
-  ran it, you are not remembering that you ran it. Never tick an automated
-  criterion without a matching passing test.
-- A criterion backed by a command's output: you ran the command in this
-  session and observed the output.
-- A criterion that cannot be demonstrated automatically (needs a human to look
-  at something: a live host, an IDE, a rendered UI, manual verification):
-  **leave it unticked** with its ID and state it explicitly in the report — e.g.
-  "CRIT-03: (manual) needs your check in a real OpenCode session; left unticked
-  pending human verification." An agent ticking a box only a human can verify
-  is the single worst failure mode of this whole file.
+```bash
+scripts/verify-crit.sh PLAN-N.md F<N>
+```
 
-Never tick a box in a phase other than the one that just closed. Never
-tick a box because the work "obviously" satisfies it. If you find yourself
-reasoning about why a criterion is *effectively* met, that is the signal
-to leave it open and raise it.
+* If the script exits with non-zero (missing `CRIT-XX` test or failing suite), **STOP immediately**. Fix the test implementation; do not attempt to bypass or explain away the failure.
+* The script output is your ground truth: copy the generated Markdown criteria table directly into your phase report.
 
-**Be honest about what this is.** Ticking a checkbox is a cooperative act
-with nothing verifying it — the same agent that did the work marks its own
-homework. It makes state visible; it does not make it true. If the user
-needs tamper-proof completion that cannot be faked, that requires an
-external deterministic task engine or transactional harness, not a prose contract.
+### 2. Tick the boxes — strictly backed by script proof
 
-### Then write the phase report
+Only after the script exits with `0`:
 
-Immediately below the ticked criteria, or in chat if the user prefers the
-plan to stay clean — ask once and remember the preference for the cycle:
+* Mark `- [ ]` → `- [x]` in `PLAN-N.md` for automated criteria confirmed by `verify-crit.sh`.
+* Leave `(manual)` criteria as `- [ ]` for human verification.
 
-- Files changed (a table, not prose).
-- Criteria demonstration table: a concise mapping showing each ticked `CRIT-XX`
-  alongside the exact test file and test name that demonstrates it, and any
-  manual `CRIT-XX` explicitly noted as pending human verification.
-- Tests added, each with **what attack or regression it guards against**,
-  not just its name.
-- Any deviation from the plan, with the reasoning. A deviation is not a
-  failure; an *unreported* deviation is.
-- Anything discovered that belongs to a later cycle → it goes to the
-  plan's "Out of scope", not into the next phase.
-- Open questions for the human.
+### 3. Write the phase report
 
-### Refresh the checkpoint
+Immediately below the ticked criteria or in chat:
 
-Before stopping, rewrite `SESSION.md` per the "Session checkpoint" clause
-in `AGENTS.md`: `Status: phase-closed, awaiting human audit`,
-`Next action` set to what starts once the human approves, and
-`Human review: pending`. This is the same write as any other session
-close — closing a phase does not exempt it.
+* **Criteria demonstration table:** Embed the exact table output produced by `verify-crit.sh`.
+* **Files changed:** Table format.
+* **Tests added & defense:** State the exact attack or regression each test guards against.
+* **Deviations from plan:** Any architectural or scope deviations with rationale.
+* **Open questions:** Pending decisions for the human.
 
-Then stop. Do not start the next phase — the human audits the diff first.
-The human audit includes verifying that newly added tests carry the `CRIT-XX`
-labels matching the ticked criteria and that no automated criterion was marked
-without test proof.
+### 4. Refresh checkpoint & STOP
+
+Rewrite `SESSION.md`:
+
+* `Status: phase-closed, awaiting human audit`
+* `Next action`: what starts after human approval.
+* `Human review: pending`
+
+**STOP.** Do not start the next phase. The human audits the git diff and reviews the report first.
 
 ---
 

@@ -105,8 +105,8 @@ file; completed ones stay in the repo as history (or can be moved to
 
 Give the user the session-start prompt to reuse for each phase:
 
-- **EN**: `"Execute Phase F{N} according to PLAN-{N}.md. If the plan is ambiguous or you believe it is wrong: STOP and ask. On completion: report modified files, added tests, deviations with justification, and open questions — then halt for diff audit."`
-- **ES**: `"Ejecutá la Fase F{N} según PLAN-{N}.md. Si el plan es ambiguo o creés que está mal: PARÁ y preguntá. Al terminar: reportá archivos cambiados, tests agregados, cualquier desviación justificada, y preguntas abiertas — después detenete, yo audito el diff."`
+- **EN**: `"Execute Phase F{N} according to PLAN-{N}.md. If ambiguous: STOP and ask. Upon completion, run scripts/verify-crit.sh PLAN-{N}.md F{N}. Report modified files, the script's verification table, and deviations — then halt for human diff audit."`
+- **ES**: `""Ejecutá la Fase F{N} según PLAN-{N}.md. Si hay ambigüedad: PARÁ y preguntá. Al completar el código, ejecutá scripts/verify-crit.sh PLAN-{N}.md F{N}. Reportá archivos cambiados, la tabla de verificación del script y desviaciones — luego detenete, yo audito el diff."`
 
 ## The non-negotiable rules (put these in the plan or the AGENTS.md contract,
 ## not just in this reference — the executor needs to see them, not you)
