@@ -34,10 +34,15 @@ TEMP_CRITS=$(mktemp)
 trap 'rm -f "$TEMP_CRITS"' EXIT
 
 if [ -n "$PHASE_ID" ]; then
-  # Extrae solo el bloque de la fase indicada (desde el encabezado de fase hasta la siguiente o fin)
+  # Extrae solo el bloque de la fase indicada: desde su encabezado de nivel 2
+  # ("## F1 — ...") hasta el siguiente encabezado de nivel 2. Nunca hasta un
+  # subtítulo de nivel 3 como "### Acceptance criteria", que pertenece a la
+  # misma fase y antes cortaba la captura antes de llegar a los CRIT-XX.
+  # El ancla exige que el ID de fase no siga con otro dígito, para no
+  # confundir F1 con F10.
   awk -v phase="$PHASE_ID" '
-    $0 ~ ("###.*" phase) || $0 ~ ("##.*" phase) { in_phase=1; next }
-    in_phase && ($0 ~ /^##+ /) { in_phase=0 }
+    $0 ~ ("^## " phase "([^0-9]|$)") { in_phase=1; next }
+    in_phase && ($0 ~ /^## /) { in_phase=0 }
     in_phase { print }
   ' "$PLAN_FILE" | grep -E '\- \[[ xX]\] CRIT-[0-9]+' > "$TEMP_CRITS" || true
 else
@@ -68,8 +73,12 @@ while IFS= read -r line; do
 
   AUTOMATED_COUNT=$((AUTOMATED_COUNT + 1))
 
-  # Busca el identificador en directorios estándar de tests o código fuente
-  MATCHES=$(git grep -in "$CRIT_ID" -- tests/ test/ spec/ src/ 2>/dev/null || true)
+  # Busca el identificador en directorios estándar de tests o código fuente.
+  # --untracked es obligatorio: un test recién escrito en esta misma sesión
+  # todavía no está en el índice de git, y sin esta bandera git grep lo
+  # ignora por completo, reportando un falso FALLO sobre evidencia que sí
+  # existe en el disco.
+  MATCHES=$(git grep --untracked -in "$CRIT_ID" -- tests/ test/ spec/ src/ 2>/dev/null || true)
 
   if [ -z "$MATCHES" ]; then
     echo "| $CRIT_ID | Automatizado | ❌ FALLO: No existe test asociado con la etiqueta $CRIT_ID |"
@@ -100,6 +109,10 @@ elif [ -f "composer.json" ]; then
   vendor/bin/phpunit
 elif [ -f "Cargo.toml" ]; then
   cargo test -q
+elif [ -f "go.mod" ]; then
+  go test ./...
+elif [ -f "pom.xml" ]; then
+  mvn test
 else
   echo "AVISO: No se detectó runner automático estándar. Ejecución omitida."
 fi

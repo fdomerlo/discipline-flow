@@ -170,6 +170,24 @@ else
   fi
 fi
 
+# Install the deterministic CRIT-XX verification gate. Always, not behind
+# a flag like the git hook — phase-close.md treats scripts/verify-crit.sh
+# as mandatory infrastructure, so a bootstrapped project needs it present
+# to follow its own contract.
+VERIFY_SRC="$SKILL_DIR/scripts/verify-crit.sh"
+VERIFY_DEST_DIR="$TARGET_DIR/scripts"
+VERIFY_DEST="$VERIFY_DEST_DIR/verify-crit.sh"
+if [[ ! -f "$VERIFY_SRC" ]]; then
+  echo "Warning: verify-crit.sh source '$VERIFY_SRC' not found. Skipping." >&2
+elif [[ -f "$VERIFY_DEST" && "$FORCE" != true ]]; then
+  echo "Notice: $VERIFY_DEST already exists, left untouched (use --force to overwrite)."
+else
+  mkdir -p "$VERIFY_DEST_DIR"
+  cp "$VERIFY_SRC" "$VERIFY_DEST"
+  chmod +x "$VERIFY_DEST"
+  echo "Installed: $VERIFY_DEST"
+fi
+
 # Install commit-msg hook if requested
 if [[ "$INSTALL_HOOK" == true ]]; then
   GIT_DIR="$TARGET_DIR/.git"
