@@ -31,13 +31,16 @@ cycle. This changes the rules:
   criterion MUST map to at least one test whose function or block name contains that
   exact identifier (e.g. `test("CRIT-01: ...")` or `def test_crit_01_...()`).
 - **Strict ticking rule (`- [x]`)**: you are strictly forbidden from ticking
-  (`- [x]`) an automated criterion if you have not run a test bearing its matching
-  `CRIT-XX` identifier and confirmed that it passes green against the current working tree.
-  Leave anything only a human can verify unticked (e.g. `CRIT-03: (manual) ...`) and explicitly
-  state that it is pending human verification.
+  (`- [x]`) an automated criterion on your own say-so. Before ticking any,
+  run the mandatory gate: `scripts/verify-crit.sh PLAN-N.md F<N>`. Tick only
+  what the script confirms — if it exits non-zero, STOP and fix the
+  underlying issue (missing test, failing test); never tick, bypass, or
+  explain the failure away. Leave anything only a human can verify unticked
+  (e.g. `CRIT-03: (manual) ...`) and explicitly state that it is pending
+  human verification.
 - At phase end, report:
-  1. Criteria demonstration mapping: every ticked `CRIT-XX` mapped to its demonstrating test
-     (file path and test name), and any manual criteria left unticked for human audit.
+  1. Criteria demonstration mapping: the exact table `scripts/verify-crit.sh`
+     printed, plus any manual criteria left unticked for human audit.
   2. Files changed (in a clear summary table).
   3. Tests added (and what attack, regression, or behavior each one guards against).
   4. Any deviation from the plan with justification.
