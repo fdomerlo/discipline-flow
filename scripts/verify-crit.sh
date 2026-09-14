@@ -7,7 +7,15 @@ set -euo pipefail
 PLAN_FILE="${1:-}"
 PHASE_ID="${2:-}"
 
-# 1. Resolver el archivo de plan si no se pasó como argumento
+# 1. Validar el estado actual en SESSION.md y resolver el archivo de plan
+if [ -f "SESSION.md" ]; then
+  sdd_state=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { print $2 }' "SESSION.md" || echo "")
+  if [ "$sdd_state" != "verify" ] && [ "$sdd_state" != "execute" ]; then
+    echo "ERROR: sdd_state in SESSION.md is '$sdd_state'. Validations require 'verify' or 'execute' state." >&2
+    exit 1
+  fi
+fi
+
 if [ -z "$PLAN_FILE" ]; then
   if [ -f "SESSION.md" ]; then
     PLAN_FILE=$(grep -oE 'PLAN-[0-9]+(\.[0-9]+)?\.md' SESSION.md | head -n 1 || true)
