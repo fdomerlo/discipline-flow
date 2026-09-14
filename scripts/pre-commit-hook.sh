@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# discipline-flow/scripts/pre-commit
+# discipline-flow/scripts/pre-commit-hook.sh
+# Installed as .git/hooks/pre-commit.
 # Bloquea cambios de código fuente mientras el proyecto esté en fase de diseño/planificación (sdd_state: plan).
 
 SESSION_FILE="SESSION.md"

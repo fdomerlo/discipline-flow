@@ -10,8 +10,10 @@
   every logical unit. Never leave the suite red at a commit boundary.
 - Atomic commits, one concern each, conventional-commit messages:
   `{{COMMIT_TYPES}}`.
-- Never hand-edit generated or state files — use the project's own
-  commands/scripts for anything that has one.
+- **PROHIBITED: Never hand-edit state files.** You are strictly forbidden
+  from manually editing the YAML frontmatter block (`--- ... ---`) of `SESSION.md`.
+  All SDD state changes (`plan`, `execute`, `verify`) and active phase updates
+  must be executed exclusively via `./scripts/sdd.sh`.
 - No new dependencies without explicit human approval.
 
 ## Plan mode
@@ -72,7 +74,7 @@ current phase in progress. Before doing anything else:
 5. Resume from "Next action" instead of re-deriving it from the plan.
 
 At the end of every session — whether or not the phase closed — rewrite
-`SESSION.md` from `assets/SESSION.md.template`. Write it atomically:
+`SESSION.md` body from `assets/SESSION.md.template`. Write it atomically:
 save the new content to `SESSION.md.tmp`, then `mv SESSION.md.tmp
 SESSION.md`. Never edit `SESSION.md` in place. `Base commit` is always
 `git rev-parse HEAD` at write time and `Updated` the current UTC

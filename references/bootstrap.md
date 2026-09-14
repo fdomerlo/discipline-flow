@@ -58,7 +58,7 @@ Options:
    **Never copy the contract prose into both files.** Two copies of a
    contract is two contracts, and they will diverge.
 5. Install git hooks (`pre-commit` and `commit-msg`):
-   - Copy `<skill-dir>/scripts/pre-commit` to `.git/hooks/pre-commit`, `chmod +x`.
+   - Copy `<skill-dir>/scripts/pre-commit-hook.sh` to `.git/hooks/pre-commit`, `chmod +x`.
    - Copy `<skill-dir>/scripts/commit-msg-hook.sh` to `.git/hooks/commit-msg`, `chmod +x`.
    - Inform the user that in an emergency, hooks can be bypassed with `git commit --no-verify`.
 6. Copy `<skill-dir>/scripts/sdd.sh` and `<skill-dir>/scripts/verify-crit.sh` to `scripts/`.

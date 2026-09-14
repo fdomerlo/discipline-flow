@@ -18,10 +18,10 @@ fi
 
 if [ -z "$PLAN_FILE" ]; then
   if [ -f "SESSION.md" ]; then
-    PLAN_FILE=$(grep -oE 'PLAN-[0-9]+(\.[0-9]+)?\.md' SESSION.md | head -n 1 || true)
+    PLAN_FILE=$(grep -oE '([a-zA-Z0-9_.-]+/)?PLAN-[0-9]+(\.[0-9]+)?\.md' SESSION.md | head -n 1 || true)
   fi
   if [ -z "$PLAN_FILE" ]; then
-    PLAN_FILE=$(ls PLAN-*.md 2>/dev/null | sort -V | tail -n 1 || true)
+    PLAN_FILE=$(ls plans/PLAN-*.md PLAN-*.md 2>/dev/null | sort -V | tail -n 1 || true)
   fi
 fi
 
@@ -43,11 +43,7 @@ trap 'rm -f "$TEMP_CRITS"' EXIT
 
 if [ -n "$PHASE_ID" ]; then
   # Extrae solo el bloque de la fase indicada: desde su encabezado de nivel 2
-  # ("## F1 — ...") hasta el siguiente encabezado de nivel 2. Nunca hasta un
-  # subtítulo de nivel 3 como "### Acceptance criteria", que pertenece a la
-  # misma fase y antes cortaba la captura antes de llegar a los CRIT-XX.
-  # El ancla exige que el ID de fase no siga con otro dígito, para no
-  # confundir F1 con F10.
+  # ("## F1 — ...") hasta el siguiente encabezado de nivel 2.
   awk -v phase="$PHASE_ID" '
     $0 ~ ("^## " phase "([^0-9]|$)") { in_phase=1; next }
     in_phase && ($0 ~ /^## /) { in_phase=0 }
@@ -75,17 +71,14 @@ while IFS= read -r line; do
   # Si está marcado explícitamente como manual
   if echo "$line" | grep -qi '(manual)'; then
     echo "| $CRIT_ID | Manual | Pendiente de verificación humana |"
-    MANUAL_COUNT=$((MANUAL_COUNT + 1))
+    MANUAL_COUNT=$((MANUAL_COUNT + 1))\
     continue
   fi
 
   AUTOMATED_COUNT=$((AUTOMATED_COUNT + 1))
 
   # Busca el identificador en directorios estándar de tests o código fuente.
-  # --untracked es obligatorio: un test recién escrito en esta misma sesión
-  # todavía no está en el índice de git, y sin esta bandera git grep lo
-  # ignora por completo, reportando un falso FALLO sobre evidencia que sí
-  # existe en el disco.
+  # --untracked es obligatorio para tests recién creados aún no en git index.
   MATCHES=$(git grep --untracked -in "$CRIT_ID" -- tests/ test/ spec/ src/ 2>/dev/null || true)
 
   if [ -z "$MATCHES" ]; then
@@ -121,8 +114,11 @@ elif [ -f "go.mod" ]; then
   go test ./...
 elif [ -f "pom.xml" ]; then
   mvn test
+elif [ -n "${TEST_COMMAND:-}" ]; then
+  $TEST_COMMAND
 else
-  echo "AVISO: No se detectó runner automático estándar. Ejecución omitida."
+  echo "ERROR: ❌ No se detectó suite de pruebas ejecutable para validar los criterios. El gate de verificación requiere pruebas reales demostrables." >&2
+  exit 1
 fi
 
 echo "VEREDICTO: ✅ Criterios verificados y suite de pruebas en verde."

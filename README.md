@@ -137,6 +137,7 @@ Para garantizar compatibilidad total sin alterar las reglas preexistentes del us
 discipline-flow/
 ├── SKILL.md                      # Definición formal de la skill, triggers y entry points
 ├── README.md                     # Este documento
+├── PROJECT_FOUNDATION.md         # Principios fundacionales y arquitectura del arnés SDD
 ├── assets/
 │   ├── AGENTS.md.template        # Plantilla del contrato operativo con delimitadores
 │   ├── PLAN.md.template          # Plantilla de especificación SDD con CRIT-XX
@@ -150,8 +151,8 @@ discipline-flow/
     ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, status)
     ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX y test runner
     ├── new-plan.sh               # Generador de nuevos planes numerados
-    ├── pre-commit                # Hook Git: Bloquea commits de código en modo plan
-    └── commit-msg-hook.sh        # Hook Git: Valida Conventional Commits y fase activa
+    ├── pre-commit-hook.sh        # Hook Git: Bloquea commits de código en modo plan (.git/hooks/pre-commit)
+    └── commit-msg-hook.sh        # Hook Git: Valida Conventional Commits y fase activa (.git/hooks/commit-msg)
 ```
 
 ---

@@ -134,18 +134,26 @@ elif [[ "$FORCE" == true ]]; then
   echo "Overwritten (--force): $AGENTS_TARGET"
 else
   if grep -q "$START_MARKER" "$AGENTS_TARGET"; then
-    python3 -c '
-import sys
-content, target, start, end = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-with open(target, "r", encoding="utf-8") as f:
-    text = f.read()
-if start in text and end in text:
-    pre = text.split(start)[0]
-    post = text.split(end, 1)[1]
-    new_text = pre.rstrip() + "\n\n" + content.strip() + "\n" + post.lstrip("\n")
-    with open(target, "w", encoding="utf-8") as f:
-        f.write(new_text)
-' "$content" "$AGENTS_TARGET" "$START_MARKER" "$END_MARKER"
+    tmp_content_file=$(mktemp)
+    tmp_target_file=$(mktemp)
+    printf '%s\n' "$content" > "$tmp_content_file"
+    awk -v repl_file="$tmp_content_file" '
+      /<!-- BEGIN DISCIPLINE-FLOW -->/ {
+        in_block=1
+        while ((getline line < repl_file) > 0) {
+          print line
+        }
+        close(repl_file)
+        next
+      }
+      /<!-- END DISCIPLINE-FLOW -->/ {
+        in_block=0
+        next
+      }
+      !in_block { print }
+    ' "$AGENTS_TARGET" > "$tmp_target_file"
+    mv "$tmp_target_file" "$AGENTS_TARGET"
+    rm -f "$tmp_content_file"
     echo "Updated existing Discipline Flow contract block in: $AGENTS_TARGET"
   else
     printf '\n\n%s\n' "$content" >> "$AGENTS_TARGET"
@@ -203,7 +211,7 @@ if [[ "$INSTALL_HOOKS" == true ]]; then
   mkdir -p "$HOOKS_DIR"
 
   # 1. Install pre-commit hook (guards code edits during plan phase)
-  PRE_COMMIT_SRC="$SKILL_DIR/scripts/pre-commit"
+  PRE_COMMIT_SRC="$SKILL_DIR/scripts/pre-commit-hook.sh"
   PRE_COMMIT_DEST="$HOOKS_DIR/pre-commit"
   if [[ -f "$PRE_COMMIT_SRC" ]]; then
     cp "$PRE_COMMIT_SRC" "$PRE_COMMIT_DEST"

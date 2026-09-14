@@ -55,12 +55,12 @@ act — same principle the contract itself enforces on the executor.
 
 ## Files this skill writes and tools included
 
-- `scripts/sdd.sh` — unified SDD CLI controller (`start F<N>`, `plan [title]`, `verify [fase]`, `status`). Manages phase lifecycle and unblocks code commits.
+- `scripts/sdd.sh` — unified SDD CLI controller (`start F<N>`, `plan [title]`, `verify [fase]`, `status`). Manages phase lifecycle, spec integrity hashes, and unblocks code commits.
 - `scripts/verify-crit.sh` — deterministic CLI gate that parses `PLAN-N.md`, enforces 1:1 `CRIT-XX` traceability against test files, executes the test suite, and generates the audit verification table.
 - `scripts/init.sh` — automated CLI runner that bootstraps `AGENTS.md`, `CLAUDE.md`, runtime scripts (`sdd.sh`, `verify-crit.sh`, `new-plan.sh`), and both git hooks in one deterministic step.
 - `scripts/new-plan.sh` — helper script that scaffolds the next unused `PLAN-N.md` (or `plans/PLAN-N.md`) with title and phase template.
 - Git hooks (installed by default in `.git/hooks/`):
-  - `pre-commit` (`scripts/pre-commit`) — blocks any source code commits when in `sdd_state: plan`.
+  - `pre-commit` (`scripts/pre-commit-hook.sh`) — blocks any source code commits when in `sdd_state: plan`.
   - `commit-msg` (`scripts/commit-msg-hook.sh`) — validates Conventional Commits format and ensures the active phase/task (e.g. `F1`) is referenced.
 - `AGENTS.md` at repo root (bootstrap) — from `assets/AGENTS.md.template`.
   **Single source of truth**, read natively by OpenCode, Antigravity,
