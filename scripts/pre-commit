@@ -1,38 +1,21 @@
 #!/usr/bin/env bash
-# scripts/pre-commit
-# Block commits that modify source files if state is 'plan'
-
-set -euo pipefail
 
 SESSION_FILE="SESSION.md"
-
-if [ ! -f "$SESSION_FILE" ]; then
-    # If there is no session file, we bypass the check.
+if [[ ! -f "$SESSION_FILE" ]]; then
     exit 0
 fi
 
-# Extract sdd_state from YAML frontmatter
-sdd_state=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { gsub(/\r/, ""); print $2 }' "$SESSION_FILE" || echo "")
+STATE=$(grep "^sdd_state:" "$SESSION_FILE" | awk '{print $2}')
 
-if [ "$sdd_state" = "plan" ]; then
-    # Check if there are modified files staged for commit that are not markdown/plan files
-    staged_files=$(git diff --cached --name-only)
-
-    source_modified=0
-    while IFS= read -r file; do
-        [ -z "$file" ] && continue
-        # Ignore SESSION.md, PLAN*.md, and other MD files generally updated in plan phase
-        if [[ "$file" != "SESSION.md" && "$file" != PLAN*.md && "$file" != *.md ]]; then
-            source_modified=1
-            echo "pre-commit hook: Source file modified ($file)."
-            break
-        fi
-    done <<< "$staged_files"
-
-    if [ $source_modified -eq 1 ]; then
-        echo "pre-commit hook: sdd_state is 'plan'."
-        echo "Source code changes are NOT allowed in the 'plan' state."
-        echo "Advance to 'execute' phase first: ./scripts/sdd.sh advance execute"
+# Barrera 1: Prohibido tocar código en fase de planificación
+if [[ "$STATE" == "plan" ]]; then
+    # Detecta cambios en archivos que no sean Markdown o texto
+    STAGED_FILES=$(git diff --cached --name-only | grep -vE '\.md$|\.txt$')
+    if [[ -n "$STAGED_FILES" ]]; then
+        echo "❌ Bloqueo SDD: Estás en fase 'plan'. El contrato prohíbe modificar código fuente."
+        echo "Archivos bloqueados:"
+        echo "$STAGED_FILES"
+        echo "👉 Usa '/execute <tarea>' o './scripts/sdd.sh start <tarea>' para avanzar."
         exit 1
     fi
 fi
