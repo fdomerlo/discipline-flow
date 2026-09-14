@@ -21,6 +21,12 @@ cycle. This changes the rules:
 
 - Work on exactly ONE phase per session — the phase the human names. Never
   start the next phase, even if it looks trivial from here.
+- **Phase activation**: Before modifying code for a phase, activate it via:
+  `./scripts/sdd.sh start F<N>` (e.g. `./scripts/sdd.sh start F1`).
+  This sets `sdd_state: execute` in `SESSION.md` and unblocks the git `pre-commit` hook.
+- **Phase-scoped commits**: Every commit message in this phase must reference the active phase
+  (e.g. `feat(F1): implement token rotation` or `test: add edge cases (F1)`). The `commit-msg`
+  hook strictly validates this convention.
 - The plan is the spec. If something in it is ambiguous or you believe it
   is wrong: **STOP and ask.** Deviating silently from the plan is the
   failure mode this whole contract exists to prevent — do not embody it.
@@ -32,8 +38,8 @@ cycle. This changes the rules:
   exact identifier (e.g. `test("CRIT-01: ...")` or `def test_crit_01_...()`).
 - **Strict ticking rule (`- [x]`)**: you are strictly forbidden from ticking
   (`- [x]`) an automated criterion on your own say-so. Before ticking any,
-  run the mandatory gate: `scripts/verify-crit.sh PLAN-N.md F<N>`. Tick only
-  what the script confirms — if it exits non-zero, STOP and fix the
+  run the mandatory gate: `./scripts/sdd.sh verify F<N>` (or `scripts/verify-crit.sh PLAN-N.md F<N>`).
+  Tick only what the script confirms — if it exits non-zero, STOP and fix the
   underlying issue (missing test, failing test); never tick, bypass, or
   explain the failure away. Leave anything only a human can verify unticked
   (e.g. `CRIT-03: (manual) ...`) and explicitly state that it is pending

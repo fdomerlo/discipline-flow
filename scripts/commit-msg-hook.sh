@@ -1,7 +1,7 @@
 #!/bin/sh
-# Installed as .git/hooks/commit-msg by the disciplined-scaffold skill.
-# Rejects commit messages that don't follow Conventional Commits.
-# Checks against discipline-flow state (active_task).
+# Installed as .git/hooks/commit-msg by discipline-flow.
+# 1. Rejects commit messages that don't follow Conventional Commits.
+# 2. In SDD 'execute' state, verifies that commit references the active phase/task (e.g. F1).
 # Bypass in an emergency with: git commit --no-verify
 
 msg_file="$1"
@@ -19,34 +19,37 @@ types="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release"
 pattern="^($types)(\([a-zA-Z0-9_.-]+\))?!?: .+"
 
 if ! echo "$first_line" | grep -Eq "$pattern"; then
-  echo "commit-msg hook: message doesn't look like a conventional commit."
-  echo "  got:      $first_line"
-  echo "  expected: <type>(<optional-scope>): <description>"
-  echo "  types:    feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release"
-  echo "  bypass:   git commit --no-verify"
+  echo "❌ commit-msg hook: El formato del mensaje no cumple Conventional Commits."
+  echo "  Mensaje recibido: $first_line"
+  echo "  Formato esperado: <type>(<scope>): <descripción>"
+  echo "  Tipos válidos:    feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release"
+  echo "  Bypass:           git commit --no-verify"
   exit 1
 fi
 
 SESSION_FILE="SESSION.md"
 if [ -f "$SESSION_FILE" ]; then
     # Extract sdd_state
-    sdd_state=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { gsub(/\r/, ""); print $2 }' "$SESSION_FILE")
+    sdd_state=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { sub(/^sdd_state:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
 
     if [ "$sdd_state" = "execute" ]; then
-        # Extract active_task
-        active_task=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^active_task:/ { sub(/^active_task:[[:space:]]*/, ""); gsub(/\r/, ""); print $0 }' "$SESSION_FILE")
+        # Extract active_task (e.g. F1)
+        active_task=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^active_task:/ { sub(/^active_task:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
 
         if [ "$active_task" = "none" ] || [ -z "$active_task" ]; then
-            echo "commit-msg hook: sdd_state is 'execute' but no active_task is set."
-            echo "Use: ./scripts/sdd.sh start <task> before committing."
+            echo "❌ commit-msg hook: El estado SDD es 'execute' pero no hay ninguna fase activa en SESSION.md."
+            echo "👉 Inicia la fase con: ./scripts/sdd.sh start F1  (o F2, etc.)"
             exit 1
         fi
 
-        # Check if the commit message contains the active_task
-        if ! grep -q "$active_task" "$msg_file"; then
-            echo "commit-msg hook: sdd_state is 'execute' but commit message doesn't reference active_task."
-            echo "  active_task: $active_task"
-            echo "Ensure your commit message includes this task name."
+        # Check if the commit message contains the active phase/task as an isolated token or scope
+        if ! grep -qiE "(^|[^a-zA-Z0-9_-])${active_task}([^a-zA-Z0-9_-]|$)" "$msg_file"; then
+            echo "❌ commit-msg hook: Estás en la fase '$active_task', pero el mensaje de commit no la menciona."
+            echo "  Fase activa requerida: $active_task"
+            echo "  Ejemplos válidos:"
+            echo "    feat($active_task): implementar rotación de tokens"
+            echo "    test: agregar caso de prueba para expiración ($active_task)"
+            echo "👉 Ajusta el mensaje o cambia de fase con: ./scripts/sdd.sh start <fase>"
             exit 1
         fi
     fi

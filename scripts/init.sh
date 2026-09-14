@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# scripts/init.sh — Bootstrap repository with discipline-flow conventions
+# scripts/init.sh — Bootstrap repository with discipline-flow conventions and deterministic gates
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 TEMPLATE_FILE="$SKILL_DIR/assets/AGENTS.md.template"
-HOOK_SRC="$SKILL_DIR/scripts/commit-msg-hook.sh"
 
 PROJECT_NAME=""
 TEST_COMMAND=""
 COMMIT_TYPES="feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release"
-INSTALL_HOOK=false
+INSTALL_HOOKS=true
 TARGET_DIR="."
 FORCE=false
 
@@ -23,20 +22,20 @@ Options:
   -t, --test-cmd <command>     Command to run test suite (e.g. "pytest", "npm test")
   -c, --commit-types <types>   Allowed commit types (default: standard Conventional Commits)
   -d, --target-dir <path>      Target directory to bootstrap (default: current directory ".")
-      --with-hook              Install .git/hooks/commit-msg
-      --no-hook                Skip git hook installation (default)
-  -f, --force                  Overwrite existing AGENTS.md and CLAUDE.md files (default: safe append/update)
+      --no-hooks               Skip git hooks installation (default: hooks are always installed)
+      --with-hooks             Explicitly enable git hooks installation (default behavior)
+  -f, --force                  Overwrite existing files and scripts (default: safe append/update)
   -h, --help                   Show this help message
 
-Behavior with pre-existing AGENTS.md:
-  By default, init.sh preserves any pre-existing AGENTS.md by appending the Discipline Flow
-  contract inside delimited markers (<!-- BEGIN DISCIPLINE-FLOW -->). If the markers already
-  exist, it updates that section in-place without touching your custom instructions.
-  Use --force to completely replace the file.
+Behavior:
+  - Bootstraps AGENTS.md preserving custom rules inside managed delimiters.
+  - Links CLAUDE.md with @AGENTS.md.
+  - Installs mandatory runtime scripts (scripts/sdd.sh, scripts/verify-crit.sh, scripts/new-plan.sh).
+  - Installs deterministic git hooks (.git/hooks/pre-commit and .git/hooks/commit-msg).
 
 Examples:
-  $(basename "$0") -t "pytest" --with-hook
-  $(basename "$0") -p "my-service" -t "npm test" -d /path/to/repo --with-hook
+  $(basename "$0") -t "pytest"
+  $(basename "$0") -p "my-service" -t "npm test" -d /path/to/repo
 EOF
 }
 
@@ -59,12 +58,12 @@ while [[ $# -gt 0 ]]; do
       TARGET_DIR="$2"
       shift 2
       ;;
-    --with-hook)
-      INSTALL_HOOK=true
+    --no-hooks)
+      INSTALL_HOOKS=false
       shift
       ;;
-    --no-hook)
-      INSTALL_HOOK=false
+    --with-hooks|--with-hook)
+      INSTALL_HOOKS=true
       shift
       ;;
     -f|--force)
@@ -170,26 +169,30 @@ else
   fi
 fi
 
-# Install the deterministic CRIT-XX verification gate. Always, not behind
-# a flag like the git hook — phase-close.md treats scripts/verify-crit.sh
-# as mandatory infrastructure, so a bootstrapped project needs it present
-# to follow its own contract.
-VERIFY_SRC="$SKILL_DIR/scripts/verify-crit.sh"
-VERIFY_DEST_DIR="$TARGET_DIR/scripts"
-VERIFY_DEST="$VERIFY_DEST_DIR/verify-crit.sh"
-if [[ ! -f "$VERIFY_SRC" ]]; then
-  echo "Warning: verify-crit.sh source '$VERIFY_SRC' not found. Skipping." >&2
-elif [[ -f "$VERIFY_DEST" && "$FORCE" != true ]]; then
-  echo "Notice: $VERIFY_DEST already exists, left untouched (use --force to overwrite)."
-else
-  mkdir -p "$VERIFY_DEST_DIR"
-  cp "$VERIFY_SRC" "$VERIFY_DEST"
-  chmod +x "$VERIFY_DEST"
-  echo "Installed: $VERIFY_DEST"
-fi
+# Install mandatory SDD scripts in target project
+SCRIPTS_DEST_DIR="$TARGET_DIR/scripts"
+mkdir -p "$SCRIPTS_DEST_DIR"
 
-# Install commit-msg hook if requested
-if [[ "$INSTALL_HOOK" == true ]]; then
+install_script() {
+  local src="$1"
+  local dest="$2"
+  if [[ ! -f "$src" ]]; then
+    echo "Warning: Source script '$src' not found. Skipping." >&2
+  elif [[ -f "$dest" && "$FORCE" != true ]]; then
+    echo "Notice: $dest already exists, left untouched (use --force to overwrite)."
+  else
+    cp "$src" "$dest"
+    chmod +x "$dest"
+    echo "Installed: $dest"
+  fi
+}
+
+install_script "$SKILL_DIR/scripts/sdd.sh" "$SCRIPTS_DEST_DIR/sdd.sh"
+install_script "$SKILL_DIR/scripts/verify-crit.sh" "$SCRIPTS_DEST_DIR/verify-crit.sh"
+install_script "$SKILL_DIR/scripts/new-plan.sh" "$SCRIPTS_DEST_DIR/new-plan.sh"
+
+# Install Git hooks (pre-commit & commit-msg) by default
+if [[ "$INSTALL_HOOKS" == true ]]; then
   GIT_DIR="$TARGET_DIR/.git"
   if [[ ! -d "$GIT_DIR" ]]; then
     echo "Notice: Target is not a git repository yet. Initializing git..."
@@ -198,14 +201,23 @@ if [[ "$INSTALL_HOOK" == true ]]; then
 
   HOOKS_DIR="$TARGET_DIR/.git/hooks"
   mkdir -p "$HOOKS_DIR"
-  HOOK_DEST="$HOOKS_DIR/commit-msg"
 
-  if [[ ! -f "$HOOK_SRC" ]]; then
-    echo "Warning: Hook source '$HOOK_SRC' not found. Skipping hook installation." >&2
-  else
-    cp "$HOOK_SRC" "$HOOK_DEST"
-    chmod +x "$HOOK_DEST"
-    echo "Installed git hook: $HOOK_DEST (bypass in emergency with 'git commit --no-verify')"
+  # 1. Install pre-commit hook (guards code edits during plan phase)
+  PRE_COMMIT_SRC="$SKILL_DIR/scripts/pre-commit"
+  PRE_COMMIT_DEST="$HOOKS_DIR/pre-commit"
+  if [[ -f "$PRE_COMMIT_SRC" ]]; then
+    cp "$PRE_COMMIT_SRC" "$PRE_COMMIT_DEST"
+    chmod +x "$PRE_COMMIT_DEST"
+    echo "Installed git hook: $PRE_COMMIT_DEST (blocks code commits during 'plan' phase)"
+  fi
+
+  # 2. Install commit-msg hook (enforces Conventional Commits & active phase)
+  COMMIT_MSG_SRC="$SKILL_DIR/scripts/commit-msg-hook.sh"
+  COMMIT_MSG_DEST="$HOOKS_DIR/commit-msg"
+  if [[ -f "$COMMIT_MSG_SRC" ]]; then
+    cp "$COMMIT_MSG_SRC" "$COMMIT_MSG_DEST"
+    chmod +x "$COMMIT_MSG_DEST"
+    echo "Installed git hook: $COMMIT_MSG_DEST (enforces conventional commits & active phase reference)"
   fi
 fi
 
@@ -213,6 +225,7 @@ echo ""
 echo "Bootstrap complete for '$PROJECT_NAME'."
 echo "Contract file: $AGENTS_TARGET"
 echo "Claude import: $CLAUDE_TARGET"
-if [[ "$INSTALL_HOOK" == true ]]; then
-  echo "Commit hook:   $TARGET_DIR/.git/hooks/commit-msg"
+echo "Scripts:       $SCRIPTS_DEST_DIR/{sdd.sh, verify-crit.sh, new-plan.sh}"
+if [[ "$INSTALL_HOOKS" == true ]]; then
+  echo "Git hooks:     $TARGET_DIR/.git/hooks/{pre-commit, commit-msg}"
 fi

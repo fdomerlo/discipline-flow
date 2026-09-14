@@ -1,8 +1,8 @@
 # Discipline Flow
 
-Arnés de **Desarrollo Guiado por Especificaciones (SDD)** y control de ejecución para agentes de código (Claude Code, Antigravity, Cursor, OpenCode).
+Arnés de **Desarrollo Guiado por Especificaciones (SDD)** y control de ejecución determinista para agentes de código (Claude Code, Antigravity, Cursor, OpenCode).
 
-Cero dependencias. Cero herramientas en segundo plano. Cero bases de datos de estado. Todo el control se ejerce mediante contratos de prosa estructurada, anclaje en Git y verificación automatizada en tests.
+Cero dependencias. Cero herramientas en segundo plano. Cero bases de datos de estado. Todo el control se ejerce mediante contratos de prosa estructurada, anclaje en Git, hooks deterministas y verificación automatizada en tests.
 
 ---
 
@@ -15,7 +15,9 @@ Cuando un agente de IA programa sin restricciones formales, suele presentar tres
 
 **Discipline Flow** impone una estructura de trabajo rigurosa donde:
 * **El plan es la especificación:** El trabajo se divide en fases atómicas con alcance cerrado.
+* **Bloqueo físico durante el diseño:** El hook `pre-commit` impide commitear código fuente mientras el plan no esté aprobado.
 * **Los criterios se demuestran con código (`CRIT-XX`):** Ninguna tarea se da por cumplida sin un test en verde que lleve su etiqueta.
+* **Trazabilidad por fases:** Los commits exigen referenciar la fase activa (`F1`, `F2`).
 * **La memoria entre sesiones es persistente (`SESSION.md`):** Se retoma el trabajo en segundos sin releer historiales muertos de chat.
 * **El humano audita el diff:** Cada fase termina con un freno obligatorio antes de tocar la rama principal.
 
@@ -27,9 +29,9 @@ El sistema desacopla responsabilidades en tres capas complementarias:
 
 | Archivo | Capa | Rol | Mutabilidad |
 | :--- | :--- | :--- | :--- |
-| **`AGENTS.md`** | Constitución | Define cómo debe comportarse el agente, qué comandos puede correr y las reglas de detención obligatoria. | Estático |
-| **`PLAN-N.md`** | Especificación | Define qué se construye, qué queda explícitamente fuera de alcance y los criterios de aceptación. | Estable por ciclo |
-| **`SESSION.md`** | Memoria | Guarda el punto exacto de interrupción, el commit base y la siguiente acción inmediata. | Altamente dinámico |
+| **`AGENTS.md`** | Constitución | Define cómo debe comportarse el agente, comandos permitidos, reglas de detención obligatoria y uso de `sdd.sh`. | Estático |
+| **`PLAN-N.md`** | Especificación | Define qué se construye, qué queda explícitamente fuera de alcance y los criterios de aceptación (`CRIT-XX`). | Estable por ciclo |
+| **`SESSION.md`** | Memoria y Estado | Guarda la máquina de estados SDD (`plan`, `execute`, `verify`), la fase activa (`active_task: F1`), el commit base y la siguiente acción. | Altamente dinámico |
 
 ---
 
@@ -44,110 +46,71 @@ Cada fase de un plan define entre 2 y 7 criterios de aceptación atómicos ident
 - [ ] CRIT-03: (manual) Verificar legibilidad del log en consola de auditoría.
 ```
 
-**Regla de oro:** El agente tiene **estrictamente prohibido** marcar `- [x]` en un criterio automatizado si no existe una prueba unitaria, de integración o e2e cuyo nombre incluya el identificador exacto (`test('CRIT-01: ...')`) y haya pasado exitosamente en la sesión actual.
+**Regla de oro:** El agente tiene **estrictamente prohibido** marcar `- [x]` en un criterio automatizado si no existe una prueba unitaria, de integración o e2e cuyo nombre incluya el identificador exacto (`test('CRIT-01: ...')`) y haya pasado exitosamente en la sesión actual mediante `./scripts/sdd.sh verify F<N>`.
 
-### B. Memoria entre Sesiones sin Sobrecarga de Tokens
+### B. Barreras Deterministas en Git (Hooks por Defecto)
+1. **`pre-commit`**: Si `sdd_state` es `plan`, bloquea commits que contengan archivos de código fuente. Obliga a que la especificación esté cerrada antes de tocar código.
+2. **`commit-msg`**: Exige Conventional Commits y verifica que, en estado `execute`, el commit mencione explícitamente la fase activa (ej. `feat(F1): ...` o `test: check crit-01 (F1)`).
+Ambos hooks se instalan automáticamente en el bootstrap del repositorio.
 
-En proyectos multisesión, `SESSION.md` actúa como un cursor liviano (~250 tokens) que almacena:
+### C. Fachada Unificada y Cero Fricción (`sdd.sh`)
+Para evitar recordar múltiples scripts o lidiar con micro-tareas, el arnés opera a nivel de **Fase** (`F1`, `F2`, etc.) a través de un único CLI:
+* `./scripts/sdd.sh plan "Título"` → Inicia plan y bloquea commits de código.
+* `./scripts/sdd.sh start F1` → Desbloquea código para la fase F1.
+* `./scripts/sdd.sh verify F1` → Corre suite de pruebas y verifica criterios `CRIT-XX`.
+* `./scripts/sdd.sh status` → Consulta el estado SDD actual.
 
-* `Base commit`: El punto de partida de la fase actual.
-* `Recorded HEAD`: El commit exacto al momento del último checkpoint.
-* `Next action`: Una única instrucción atómica y ejecutable.
-* `Open decisions`: Dudas de arquitectura que requieren intervención humana.
-
-Al iniciar una nueva sesión, el agente ejecuta:
-
-```bash
-git merge-base --is-ancestor <base-commit> HEAD
-```
-
-Si la historia de Git divergió (rebase, reset, force-push), el agente se detiene inmediatamente en lugar de alucinar sobre un estado que ya no existe.
-
-### C. Jerarquía Estricta de Autoridad
-
-Ante cualquier discrepancia en el repositorio, rige este orden de precedencia:
-
-```text
-Git (código y working tree) > PLAN-N.md (especificación) > SESSION.md (memoria)
-```
-
-Si la memoria del agente contradice los archivos en disco, manda el disco. Si el código requiere violar el plan, el agente se detiene y pide una corrección formal.
+> **Sin fricción:** El desarrollador puede pedirle al agente en el chat *"Arrancá la fase F1"* o usar slash commands (ej. `/execute F1`). El agente tiene la instrucción constitucional de invocar `./scripts/sdd.sh start F1` por detrás automáticamente.
 
 ---
 
 ## 4. Integración y Descubrimiento (Project-Local y Agnóstica de Modelo)
 
-Discipline Flow está diseñado como una skill **local al proyecto** (*project-local*) y **completamente agnóstica del modelo**, lo que significa que no asume ningún proveedor de IA específico, ni requiere extensiones propietarias o servidores en background.
+Discipline Flow es una skill **local al proyecto** (*project-local*) y **completamente agnóstica del modelo**:
 
 ### A. Naturaleza Project-Local
-La skill reside en el propio repositorio objetivo, lo que garantiza portabilidad entre desarrolladores y entornos de CI sin instalar dependencias globales:
+* **Antigravity / Gemini:** `.agents/skills/discipline-flow/` o `.gemini/config/skills/discipline-flow/`
+* **Claude Code:** `.claude/skills/discipline-flow/`
+* **Agnóstico / Submódulo Git:** `skills/discipline-flow/`
+* **Zero Runtime Overhead:** Opera mediante scripts Bash livianos estándar y archivos Markdown.
 
-* **Estructura recomendada en el proyecto:**
-  * **Antigravity / Gemini:** `.agents/skills/discipline-flow/` o `.gemini/config/skills/discipline-flow/`
-  * **Claude Code:** `.claude/skills/discipline-flow/`
-  * **Agnóstico / Submódulo Git:** `skills/discipline-flow/`
-* **Zero Runtime Overhead:** No requiere Node.js, Python runtime en ejecución, demonios ni bases de datos. Todo opera mediante scripts Bash livianos estándar y archivos Markdown.
+### B. Descubrimiento Semántico y Constitucional
+* **Semántico (`SKILL.md`):** Indexado por agentes compatibles para activar la skill ante solicitudes de planificación o desarrollo disciplinado.
+* **Constitucional (`AGENTS.md` / `CLAUDE.md`):** Anclaje directo en el repositorio. `CLAUDE.md` apunta a `@AGENTS.md` sin duplicar contratos.
 
-### B. Agnóstica del Modelo
-El arnés opera eficazmente con cualquier modelo de razonamiento moderno (min.: Claude 3.7 Sonnet, Gemini 2.0/2.5 Pro & Flash, GPT-4o, DeepSeek R1/V3, o modelos locales vía Ollama). 
+### C. Flujo de Trabajo en Tiempo de Ejecución
 
-No depende de herramientas propietarias de function-calling o configuraciones específicas de proveedor. La inteligencia de control se rige por:
-1. **Contratos en prosa estructurada** (`AGENTS.md`).
-2. **Especificaciones de fases con identificadores** (`PLAN-N.md` con `CRIT-XX`).
-3. **Anclaje en Git** (`git rev-parse HEAD`, `git merge-base`).
-4. **Test runners nativos** del proyecto (`npm test`, `pytest`, `cargo test`, `go test`, `mvn test`).
-
-### C. Cómo Descubre la Skill el Agente
-El descubrimiento se produce en dos niveles complementarios:
-
-1. **Descubrimiento Semántico por Plataforma (`SKILL.md`):**
-   Los entornos compatibles con el estándar de Agent Skills (Antigravity, Claude Code, etc.) indexan el frontmatter YAML de [SKILL.md](file:///home/fdomerlo/Proyectos/github.com/fdomerlo/discipline-flow/SKILL.md):
-   ```yaml
-   ---
-   name: discipline-flow
-   description: Bootstraps repositories with an AI executor contract (AGENTS.md, conventional commits hook) or scaffolds structured, phased PLAN-N.md cycles with human audit between phases. Trigger when starting a new project, setting up commit conventions, breaking multi-session work into phases, or closing an execution phase.
-   ---
-   ```
-   Cuando el usuario solicita iniciar un proyecto, trabajar en fases, planificar una tarea compleja o reanudar una sesión interrumpida, el arnés activa automáticamente la skill e inyecta sus instrucciones en el contexto de trabajo.
-
-2. **Descubrimiento Constitucional en Repositorio (`AGENTS.md` / `CLAUDE.md`):**
-   Para clientes que no implementan un catálogo dinámico de skills (como Cursor, OpenCode o sesiones directas de terminal), el arnés se ancla permanentemente en el repositorio:
-   * `AGENTS.md` en la raíz es leído de forma estándar y nativa por Antigravity, OpenCode, Codex y Cursor.
-   * `CLAUDE.md` en la raíz contiene la directiva `@AGENTS.md`, el mecanismo documentado de Anthropic para importar reglas de repositorio sin duplicar archivos ni requerir symlinks de administrador en Windows.
-
-### D. Cómo Utiliza la Skill el Agente en Tiempo de Ejecución
-El flujo de trabajo del agente sigue una máquina de estados determinista:
-
-```
+```text
                   ┌──────────────────────┐
                   │ Inicio de la sesión  │
                   └──────────┬───────────┘
                              │
                   ¿Existe SESSION.md?
-                  ┌──────────┴──────────┐
-               SÍ │                     │ NO
-                  ▼                     ▼
+                  ┌──────────┴───────────┐
+               SÍ │                      │ NO
+                  ▼                      ▼
      git merge-base OK?          Lee SKILL.md y rutea:
      ┌────────────┴──────────┐   ├── A: Bootstrap (init.sh)
-  SÍ │                    NO │   ├── B: Plan Cycle (new-plan.sh)
-     ▼                       ▼   └── C: Phase Close
+  SÍ │                    NO │   ├── B: Plan Cycle (sdd.sh plan)
+     ▼                       ▼   └── C: Phase Close (sdd.sh verify)
 Reanuda desde          ALTO OBLIGATORIO
 "Next action"       (divergencia detectada)
      │                       ▲
      ▼                       │
 Ejecuta fase:                │
-  1. Test con CRIT-XX (RED)  │
-  2. Implementa código (GREEN)
-  3. Suite completa en verde  │
-  4. Actualiza SESSION.md ───┘
-  5. ALTO: Entrega reporte para auditoría humana de diff
+  1. sdd.sh start F1         │
+  2. Test CRIT-XX (RED)      │
+  3. Código (GREEN)          │
+  4. Commit feat(F1): ...    │
+  5. sdd.sh verify F1 ───────┘
+  6. ALTO: Reporte para auditoría humana de diff
 ```
 
 ---
 
 ## 5. Coexistencia con `AGENTS.md`
 
-Para garantizar compatibilidad total sin alterar las reglas del usuario, Discipline Flow utiliza **bloques administrados delimitados** (*Managed Delimited Blocks*):
+Para garantizar compatibilidad total sin alterar las reglas preexistentes del usuario, Discipline Flow utiliza **bloques administrados delimitados** (*Managed Delimited Blocks*):
 
 ```markdown
 <!-- BEGIN DISCIPLINE-FLOW -->
@@ -160,12 +123,11 @@ Para garantizar compatibilidad total sin alterar las reglas del usuario, Discipl
 <!-- END DISCIPLINE-FLOW -->
 ```
 
-### Comportamiento Inteligente de Integración:
-* **Si `AGENTS.md` no existe:** Se crea desde cero conteniendo el bloque delimitado del contrato.
-* **Si `AGENTS.md` ya existe (sin el bloque):** Se realiza un **append no destructivo** al final del archivo. Las directrices originales del equipo quedan 100% intactas al comienzo, y el contrato de Discipline Flow se anexa a continuación.
-* **Si `AGENTS.md` ya contiene el bloque:** Al reejecutar `scripts/init.sh` (por ejemplo, para actualizar comandos de test o types de commit), se actualiza **únicamente** la sección entre los marcadores `<!-- BEGIN DISCIPLINE-FLOW -->` y `<!-- END DISCIPLINE-FLOW -->`. Es totalmente idempotente y nunca duplica contenido.
-* **Preservación de `CLAUDE.md`:** Si `CLAUDE.md` ya existía con reglas propias, se añade `@AGENTS.md` al final si no está presente, garantizando que Claude Code lea ambas fuentes sin destruir configuraciones previas.
-* **Flag de excepción `--force`:** Solo si el desarrollador solicita explícitamente un reemplazo total (`--force`), los archivos son sobrescritos por completo.
+* **Si `AGENTS.md` no existe:** Se crea conteniendo el bloque delimitado.
+* **Si ya existe:** Se realiza un **append no destructivo**.
+* **Idempotente:** Reejecutar `init.sh` actualiza **únicamente** la sección entre los marcadores.
+* **`CLAUDE.md`:** Se añade `@AGENTS.md` al final si no está presente.
+* **Sobrescritura total:** Solo disponible mediante el flag explícito `--force`.
 
 ---
 
@@ -178,63 +140,77 @@ discipline-flow/
 ├── assets/
 │   ├── AGENTS.md.template        # Plantilla del contrato operativo con delimitadores
 │   ├── PLAN.md.template          # Plantilla de especificación SDD con CRIT-XX
-│   └── SESSION.md.template       # Plantilla del checkpoint de sesión
+│   └── SESSION.md.template       # Plantilla del checkpoint de sesión con frontmatter SDD
 ├── references/
 │   ├── bootstrap.md              # Guía de inicialización de repositorios y coexistence
-│   ├── plan-cycle.md             # Guía del ciclo de planificación y ejecución
+│   ├── plan-cycle.md             # Guía del ciclo de planificación y ejecución por fases
 │   └── phase-close.md            # Protocolo de cierre de fase y auditoría de diff
 └── scripts/
-    ├── init.sh                   # Script de instalación inicial (append idempotente)
+    ├── init.sh                   # Script de instalación inicial (scripts + hooks por defecto)
+    ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, status)
+    ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX y test runner
     ├── new-plan.sh               # Generador de nuevos planes numerados
-    └── commit-msg-hook.sh        # Hook opcional de commits convencionales
+    ├── pre-commit                # Hook Git: Bloquea commits de código en modo plan
+    └── commit-msg-hook.sh        # Hook Git: Valida Conventional Commits y fase activa
 ```
 
 ---
 
-## 7. El Ciclo de Trabajo del Agente en 4 Pasos
+## 7. El Ciclo de Trabajo en 4 Pasos
 
 ### Paso 1: Bootstrap (Inicialización)
 
-Activa la disciplina en un proyecto nuevo o existente sin destruir directrices previas:
+Activa la disciplina en un proyecto nuevo o existente. Instala scripts y hooks de Git por defecto:
 
 ```bash
-./scripts/init.sh -t "npm test" --with-hook
+./scripts/init.sh -t "npm test"
 ```
 
-Esto inyecta `AGENTS.md` respetando archivos preexistentes, configura `CLAUDE.md` con `@AGENTS.md` e instala opcionalmente el hook de Conventional Commits.
+Esto genera `AGENTS.md`, vincula `CLAUDE.md`, copia `scripts/{sdd.sh, verify-crit.sh, new-plan.sh}` e instala los hooks `.git/hooks/{pre-commit, commit-msg}`. *(Opcionalmente `--no-hooks` si se desean omitir).*
 
 ### Paso 2: Planificación (Spec First)
 
 Antes de escribir código, genera la especificación formal del ciclo:
 
 ```bash
-./scripts/new-plan.sh "Autenticación JWT y Rotación de Tokens"
+./scripts/sdd.sh plan "Autenticación JWT y Rotación de Tokens"
 ```
 
-El agente y el desarrollador definen el objetivo, declaran qué queda fuera de alcance (*Out of Scope*) y redactan los criterios `CRIT-01`, `CRIT-02`. **El agente se detiene aquí:** el plan debe ser aprobado por el humano antes de tocar código.
+El proyecto entra en `sdd_state: plan`. En este estado, el hook `pre-commit` impide commitear código. El agente y el desarrollador definen el objetivo, las fases (`F1`, `F2`) y los criterios `CRIT-01`, `CRIT-02`. **El agente se detiene aquí:** el plan debe ser aprobado por el humano.
 
-### Paso 3: Ejecución y Checkpoint
+### Paso 3: Ejecución de Fase (Código Desbloqueado)
 
-Implementa fase por fase:
+Para comenzar a programar la primera fase:
 
-1. Escribe el test automatizado que referencia explícitamente a `CRIT-XX`.
-2. Escribe el código mínimo de producción para ponerlo en verde (RED → GREEN).
-3. Actualiza atómicamente `SESSION.md` (`.tmp` -> rename) al completar hitos significativos.
-4. Si se corta el contexto o la sesión, la siguiente reanuda directamente desde `Next action`.
+```bash
+./scripts/sdd.sh start F1
+```
+
+*(O en el chat con el agente: "Arrancá la fase F1", y el agente corre este comando).*
+1. El estado pasa a `execute` y la fase activa se fija en `F1` (código desbloqueado).
+2. Se escribe el test automatizado que referencia explícitamente a `CRIT-XX`.
+3. Se escribe el código mínimo de producción para ponerlo en verde (RED → GREEN).
+4. Cada commit incluye la fase: `git commit -m "feat(F1): implementar rotación de tokens"`.
+5. Se actualiza atómicamente `SESSION.md`.
 
 ### Paso 4: Cierre de Fase y Auditoría Humana
 
 Al completar los criterios de la fase:
 
-1. Ejecuta la suite completa de pruebas del proyecto.
-2. Genera una tabla de correspondencia demostrando qué test valida cada `CRIT-XX`.
-3. Deja los criterios manuales (`CRIT-XX: (manual)`) sin marcar para revisión humana.
-4. **Se detiene obligatoriamente.** No avanza a la siguiente fase hasta que el humano audite y apruebe el diff en Git.
+```bash
+./scripts/sdd.sh verify F1
+```
+
+1. El gate verifica la correspondencia 1:1 entre cada `CRIT-XX` y los tests en el código (`--untracked` incluido).
+2. Corre la suite completa de pruebas del proyecto.
+3. Si pasa todo en verde, el estado avanza a `verify`.
+4. El agente genera el reporte de cierre con la tabla de evidencia.
+5. **Se detiene obligatoriamente.** No avanza a la siguiente fase hasta que el humano audite y apruebe el diff en Git.
 
 ---
 
 ## 8. Alcance Honesto y Garantías
 
-* **Es un arnés basado en contratos:** Funciona instruyendo al agente con reglas operativas inequívocas y validaciones humanas.
-* **Sin bloqueos de software pesados:** No introduce demonios en segundo plano, locks distribuidos ni parsers de AST. La rigidez la aportan Git y los tests del propio proyecto.
-* **Resiliencia ante fallos:** No promete transaccionalidad matemática ACID, pero reduce en más de un 90% el retrabajo y la pérdida de rumbo habitual en agentes autónomos.
+* **Es un arnés basado en contratos y gates deterministas:** Funciona instruyendo al agente con reglas operativas inequívocas y protegiendo el repositorio con hooks estándar de Git.
+* **Sin bloqueos de software pesados:** No introduce demonios en segundo plano, locks distribuidos ni parsers de AST. La rigidez la aportan Git, Bash y los tests del propio proyecto.
+* **Resiliencia ante fallos:** No promete transaccionalidad matemática ACID, pero reduce drásticamente el retrabajo y la pérdida de rumbo habitual en agentes autónomos.

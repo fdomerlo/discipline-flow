@@ -1,6 +1,6 @@
 ---
 name: discipline-flow
-description: Bootstraps repositories with an AI executor contract (AGENTS.md, conventional commits hook) or scaffolds structured, phased PLAN-N.md cycles with human audit between phases. Trigger when starting a new project, setting up commit conventions, breaking multi-session work into phases, or closing an execution phase.
+description: Bootstraps repositories with an AI executor contract (AGENTS.md, deterministic git hooks, unified SDD CLI) and scaffolds structured, phased PLAN-N.md cycles with human audit between phases. Trigger when starting a new project, setting up commit conventions, breaking multi-session work into phases, or closing an execution phase.
 ---
 
 # Discipline Flow
@@ -11,13 +11,10 @@ session, human review of every diff before merge, spec-driven development (SDD)
 with strict `CRIT-XX` criteria-to-test traceability, and an agent that stops
 to ask instead of guessing when a plan is ambiguous.
 
-**Honest scope, read this first.** This is a *prose contract* — conventions
-an agent reads and (usually) follows, not code-enforced state. It gives you
-maybe 80% of the value of a full transactional workflow engine for a
-fraction of the setup. If you need crash-safe state, multi-agent locking,
-or a hard approval gate enforced in code rather than in text, that's a
-different, heavier tool — see "Upgrade path" below. Say so to the user if
-they ask for guarantees this can't give.
+**Honest scope, read this first.** This is a *prose contract* backed by *deterministic
+git hooks and verification scripts* — conventions an agent follows, with code-enforced
+guardrails preventing unauthorized code edits during planning or non-conventional commits.
+If you need crash-safe state or multi-agent distributed locking, see "Upgrade path".
 
 ## Three entry points
 
@@ -58,9 +55,13 @@ act — same principle the contract itself enforces on the executor.
 
 ## Files this skill writes and tools included
 
+- `scripts/sdd.sh` — unified SDD CLI controller (`start F<N>`, `plan [title]`, `verify [fase]`, `status`). Manages phase lifecycle and unblocks code commits.
 - `scripts/verify-crit.sh` — deterministic CLI gate that parses `PLAN-N.md`, enforces 1:1 `CRIT-XX` traceability against test files, executes the test suite, and generates the audit verification table.
-- `scripts/init.sh` — automated CLI runner that bootstraps `AGENTS.md`, `CLAUDE.md`, and the git hook in one deterministic step (with safe append for pre-existing contracts).
+- `scripts/init.sh` — automated CLI runner that bootstraps `AGENTS.md`, `CLAUDE.md`, runtime scripts (`sdd.sh`, `verify-crit.sh`, `new-plan.sh`), and both git hooks in one deterministic step.
 - `scripts/new-plan.sh` — helper script that scaffolds the next unused `PLAN-N.md` (or `plans/PLAN-N.md`) with title and phase template.
+- Git hooks (installed by default in `.git/hooks/`):
+  - `pre-commit` (`scripts/pre-commit`) — blocks any source code commits when in `sdd_state: plan`.
+  - `commit-msg` (`scripts/commit-msg-hook.sh`) — validates Conventional Commits format and ensures the active phase/task (e.g. `F1`) is referenced.
 - `AGENTS.md` at repo root (bootstrap) — from `assets/AGENTS.md.template`.
   **Single source of truth**, read natively by OpenCode, Antigravity,
   Codex, Cursor and others. Appended cleanly within managed markers (`<!-- BEGIN DISCIPLINE-FLOW -->`) if an `AGENTS.md` already exists.
@@ -77,9 +78,6 @@ act — same principle the contract itself enforces on the executor.
   or not a phase closed) — from `assets/SESSION.md.template`. Read first,
   before anything else, if present at session start. See the "Session
   checkpoint" clause in `AGENTS.md` for the read/write protocol.
-- Optional: `scripts/commit-msg-hook.sh` installed as
-  `.git/hooks/commit-msg` — the one rule in this skill that can actually
-  be enforced in code instead of prose, so it is. Offer it, don't force it.
 
 ## Upgrade path
 

@@ -12,14 +12,16 @@ Runs when a phase's work is done, **before** anyone starts the next one.
 
 ### 1. Deterministic Verification Gate (Mandatory)
 
-Before writing any report or updating state, you MUST run the verification script:
+Before writing any report or updating state, you MUST run the verification gate:
 
 ```bash
-scripts/verify-crit.sh PLAN-N.md F<N>
+./scripts/sdd.sh verify F<N>
+# or directly: scripts/verify-crit.sh PLAN-N.md F<N>
 ```
 
-* If the script exits with non-zero (missing `CRIT-XX` test or failing suite), **STOP immediately**. Fix the test implementation; do not attempt to bypass or explain away the failure.
+* If the verification exits with non-zero (missing `CRIT-XX` test or failing suite), **STOP immediately**. Fix the test implementation; do not attempt to bypass or explain away the failure.
 * The script output is your ground truth: copy the generated Markdown criteria table directly into your phase report.
+* `sdd.sh verify` automatically advances `sdd_state` to `verify` upon success.
 
 ### 2. Tick the boxes — strictly backed by script proof
 

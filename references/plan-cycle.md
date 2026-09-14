@@ -41,7 +41,7 @@ as it is flagged as a STOP, never as a silent assumption.
 
 ## Step 2 — Fill the template
 
-Read the template from the skill's directory (`<skill-dir>/assets/PLAN.md.template`), or run `scripts/new-plan.sh "<TITLE>"`:
+Read the template from the skill's directory (`<skill-dir>/assets/PLAN.md.template`), or run `scripts/sdd.sh plan "<TITLE>"`:
 
 - **Objective**, one sentence. If you can't compress it to one sentence,
   the scope isn't decided yet — go back to the user before writing phases.
@@ -103,16 +103,24 @@ first. Never overwrite an existing `PLAN-N.md`: each cycle gets its own
 file; completed ones stay in the repo as history (or can be moved to
 `plans/archive/` at cycle close).
 
+Ensure the repository is in plan state:
+```bash
+./scripts/sdd.sh advance plan
+```
+This activates the `pre-commit` lock protecting against accidental code edits while the plan is under review.
+
 Give the user the session-start prompt to reuse for each phase:
 
-- **EN**: `"Execute Phase F{N} according to PLAN-{N}.md. If ambiguous: STOP and ask. Upon completion, run scripts/verify-crit.sh PLAN-{N}.md F{N}. Report modified files, the script's verification table, and deviations — then halt for human diff audit."`
-- **ES**: `""Ejecutá la Fase F{N} según PLAN-{N}.md. Si hay ambigüedad: PARÁ y preguntá. Al completar el código, ejecutá scripts/verify-crit.sh PLAN-{N}.md F{N}. Reportá archivos cambiados, la tabla de verificación del script y desviaciones — luego detenete, yo audito el diff."`
+- **EN**: `"Execute Phase F{N} according to PLAN-{N}.md. First run ./scripts/sdd.sh start F{N} to unlock code commits. If ambiguous: STOP and ask. Upon completion, run ./scripts/sdd.sh verify F{N}. Report modified files, the verification table, and deviations — then halt for human diff audit."`
+- **ES**: `"Ejecutá la Fase F{N} según PLAN-{N}.md. Primero ejecutá ./scripts/sdd.sh start F{N} para desbloquear commits de código. Si hay ambigüedad: PARÁ y preguntá. Al completar el código, ejecutá ./scripts/sdd.sh verify F{N}. Reportá archivos cambiados, la tabla de verificación y desviaciones — luego detenete, yo audito el diff."`
 
 ## The non-negotiable rules (put these in the plan or the AGENTS.md contract,
 ## not just in this reference — the executor needs to see them, not you)
 
 - One phase = one session = one reviewable diff. Never chain phases in a
   single turn without the human looking at what happened in between.
+- Phase activation before code: run `./scripts/sdd.sh start F<N>` before writing code.
+- Phase-tagged commits: include the phase identifier (e.g. `feat(F1): ...`) in every commit.
 - The plan is the spec. If code and plan disagree, that's a bug in one of
   them — stop and say which, don't silently pick one.
 - No new dependencies without explicit approval, ever, mid-phase.
