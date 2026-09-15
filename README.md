@@ -58,9 +58,10 @@ Para evitar recordar múltiples scripts o lidiar con micro-tareas, el arnés ope
 * `./scripts/sdd.sh plan "Título"` → Inicia plan y bloquea commits de código.
 * `./scripts/sdd.sh start F1` → Desbloquea código para la fase F1.
 * `./scripts/sdd.sh verify F1` → Corre suite de pruebas y verifica criterios `CRIT-XX`.
-* `./scripts/sdd.sh status` → Consulta el estado SDD actual.
+* `./scripts/sdd.sh advance <estado>` → Transiciona el estado SDD (`plan`, `execute`, `verify`).
+* `./scripts/sdd.sh status` → Consulta el estado SDD actual y la integridad del hash de especificación.
 
-> **Sin fricción:** El desarrollador puede pedirle al agente en el chat *"Arrancá la fase F1"* o usar slash commands (ej. `/execute F1`). El agente tiene la instrucción constitucional de invocar `./scripts/sdd.sh start F1` por detrás automáticamente.
+> **Sin fricción:** El desarrollador puede pedirle al agente en el chat *"Arrancá la fase F1"* o usar comandos naturales. El agente tiene la instrucción constitucional de invocar silenciosamente `./scripts/sdd.sh start F1` por detrás para sincronizar el gatekeeper físico.
 
 ---
 
@@ -135,7 +136,7 @@ Para garantizar compatibilidad total sin alterar las reglas preexistentes del us
 
 ```text
 discipline-flow/
-├── SKILL.md                      # Definición formal de la skill, triggers y entry points
+├── SKILL.md                      # Contrato operativo del agente (SDD Gatekeeper en inglés con salida en español)
 ├── README.md                     # Este documento
 ├── PROJECT_FOUNDATION.md         # Principios fundacionales y arquitectura del arnés SDD
 ├── assets/
@@ -144,11 +145,18 @@ discipline-flow/
 │   └── SESSION.md.template       # Plantilla del checkpoint de sesión con frontmatter SDD
 ├── references/
 │   ├── bootstrap.md              # Guía de inicialización de repositorios y coexistence
+│   ├── definition-of-done.md     # Estándar de calidad y criterios de completitud
+│   ├── doubt-driven-development.md # Metodología de clarificación previa (Fase Cero)
+│   ├── phase-close.md            # Protocolo de cierre de fase y auditoría de diff
 │   ├── plan-cycle.md             # Guía del ciclo de planificación y ejecución por fases
-│   └── phase-close.md            # Protocolo de cierre de fase y auditoría de diff
+│   ├── security-checklist.md     # Lista de control de seguridad para agentes de código
+│   ├── spec-driven-development.md # Principios de desarrollo guiado por especificaciones (SDD)
+│   ├── task-breakdown.md         # Heurísticas de desglose atómico de tareas
+│   ├── test-driven-development.md # Ciclo TDD estricto (RED -> GREEN -> REFACTOR)
+│   └── testing-patterns.md       # Patrones de testing y trazabilidad CRIT-XX
 └── scripts/
     ├── init.sh                   # Script de instalación inicial (scripts + hooks por defecto)
-    ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, status)
+    ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, advance, status)
     ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX y test runner
     ├── new-plan.sh               # Generador de nuevos planes numerados
     ├── pre-commit-hook.sh        # Hook Git: Bloquea commits de código en modo plan (.git/hooks/pre-commit)
