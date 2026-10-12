@@ -12,6 +12,7 @@ COMMIT_TYPES="feat, fix, docs, style, refactor, perf, test, build, ci, chore, re
 INSTALL_HOOKS=true
 TARGET_DIR="."
 FORCE=false
+SELF_MODE=false
 
 print_help() {
   cat <<EOF
@@ -24,18 +25,20 @@ Options:
   -d, --target-dir <path>      Target directory to bootstrap (default: current directory ".")
       --no-hooks               Skip git hooks installation (default: hooks are always installed)
       --with-hooks             Explicitly enable git hooks installation (default behavior)
+      --self                   Dogfooding: bootstrap this skill repo itself
+                               (TARGET_DIR=<skill-dir>, test-cmd defaults to ./tests/run.sh)
   -f, --force                  Overwrite existing files and scripts (default: safe append/update)
   -h, --help                   Show this help message
 
 Behavior:
   - Bootstraps AGENTS.md preserving custom rules inside managed delimiters.
-  - Links CLAUDE.md with @AGENTS.md.
-  - Installs mandatory runtime scripts (scripts/sdd.sh, scripts/verify-crit.sh, scripts/new-plan.sh).
+  - Installs mandatory runtime scripts (scripts/sdd.sh, scripts/verify-crit.sh, scripts/new-plan.sh, scripts/lib/sdd-common.sh).
   - Installs deterministic git hooks (.git/hooks/pre-commit and .git/hooks/commit-msg).
 
 Examples:
   $(basename "$0") -t "pytest"
   $(basename "$0") -p "my-service" -t "npm test" -d /path/to/repo
+  $(basename "$0") --self   # activate dogfooding hooks in this repo
 EOF
 }
 
@@ -66,6 +69,10 @@ while [[ $# -gt 0 ]]; do
       INSTALL_HOOKS=true
       shift
       ;;
+    --self)
+      SELF_MODE=true
+      shift
+      ;;
     -f|--force)
       FORCE=true
       shift
@@ -81,6 +88,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# --self: dogfood this skill repo (hooks + lib, no AGENTS prompt needed)
+if [[ "$SELF_MODE" == true ]]; then
+  TARGET_DIR="$SKILL_DIR"
+  if [[ -z "$TEST_COMMAND" ]]; then
+    TEST_COMMAND="./tests/run.sh"
+  fi
+fi
 
 # Resolve absolute target path
 TARGET_DIR="$(cd "$TARGET_DIR" 2>/dev/null && pwd || echo "$TARGET_DIR")"
@@ -114,7 +129,6 @@ if [[ ! -f "$TEMPLATE_FILE" ]]; then
 fi
 
 AGENTS_TARGET="$TARGET_DIR/AGENTS.md"
-CLAUDE_TARGET="$TARGET_DIR/CLAUDE.md"
 
 # Generate content from template safely
 content="$(<"$TEMPLATE_FILE")"
@@ -161,22 +175,6 @@ else
   fi
 fi
 
-# Manage CLAUDE.md (Safe create / append)
-if [[ ! -f "$CLAUDE_TARGET" ]]; then
-  printf '@AGENTS.md\n' > "$CLAUDE_TARGET"
-  echo "Created: $CLAUDE_TARGET (pointing to @AGENTS.md)"
-elif [[ "$FORCE" == true ]]; then
-  printf '@AGENTS.md\n' > "$CLAUDE_TARGET"
-  echo "Overwritten (--force): $CLAUDE_TARGET (pointing to @AGENTS.md)"
-else
-  if grep -q '@AGENTS.md' "$CLAUDE_TARGET"; then
-    echo "Notice: $CLAUDE_TARGET already references @AGENTS.md"
-  else
-    printf '\n@AGENTS.md\n' >> "$CLAUDE_TARGET"
-    echo "Appended: @AGENTS.md reference to existing $CLAUDE_TARGET"
-  fi
-fi
-
 # Install mandatory SDD scripts in target project
 SCRIPTS_DEST_DIR="$TARGET_DIR/scripts"
 mkdir -p "$SCRIPTS_DEST_DIR"
@@ -186,6 +184,8 @@ install_script() {
   local dest="$2"
   if [[ ! -f "$src" ]]; then
     echo "Warning: Source script '$src' not found. Skipping." >&2
+  elif [[ "$src" -ef "$dest" ]]; then
+    echo "Notice: $dest is the skill source itself (--self), left in place."
   elif [[ -f "$dest" && "$FORCE" != true ]]; then
     echo "Notice: $dest already exists, left untouched (use --force to overwrite)."
   else
@@ -198,6 +198,8 @@ install_script() {
 install_script "$SKILL_DIR/scripts/sdd.sh" "$SCRIPTS_DEST_DIR/sdd.sh"
 install_script "$SKILL_DIR/scripts/verify-crit.sh" "$SCRIPTS_DEST_DIR/verify-crit.sh"
 install_script "$SKILL_DIR/scripts/new-plan.sh" "$SCRIPTS_DEST_DIR/new-plan.sh"
+mkdir -p "$SCRIPTS_DEST_DIR/lib"
+install_script "$SKILL_DIR/scripts/lib/sdd-common.sh" "$SCRIPTS_DEST_DIR/lib/sdd-common.sh"
 
 # Install Git hooks (pre-commit & commit-msg) by default
 if [[ "$INSTALL_HOOKS" == true ]]; then
@@ -232,8 +234,7 @@ fi
 echo ""
 echo "Bootstrap complete for '$PROJECT_NAME'."
 echo "Contract file: $AGENTS_TARGET"
-echo "Claude import: $CLAUDE_TARGET"
-echo "Scripts:       $SCRIPTS_DEST_DIR/{sdd.sh, verify-crit.sh, new-plan.sh}"
+echo "Scripts:       $SCRIPTS_DEST_DIR/{sdd.sh, verify-crit.sh, new-plan.sh, lib/sdd-common.sh}"
 if [[ "$INSTALL_HOOKS" == true ]]; then
   echo "Git hooks:     $TARGET_DIR/.git/hooks/{pre-commit, commit-msg}"
 fi
