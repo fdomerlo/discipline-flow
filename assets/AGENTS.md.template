@@ -4,8 +4,10 @@
 ## Always
 
 - Code, comments, error messages, commit messages, and any file inside
-  this repo: **English**. Chat with the human: whatever language they're
-  using.
+  this repo: **English**. Chat with the human, plans (`PLAN-*.md`),
+  session checkpoint (`SESSION.md` body), audit tables, and closure
+  reports: whatever language they're using (Spanish by default, per `SKILL.md`
+  language rule).
 - Run `{{TEST_COMMAND}}` before your first change in a session and after
   every logical unit. Never leave the suite red at a commit boundary.
 - Atomic commits, one concern each, conventional-commit messages:
@@ -18,7 +20,8 @@
 
 ## Plan mode
 
-If a `PLAN-*.md` file exists at the repo root, you are executing a planned
+If a `PLAN-*.md` file exists in `plans/` or at the repo root
+(canonical location: `plans/`; root is legacy and still accepted), you are executing a planned
 cycle. This changes the rules:
 
 - Work on exactly ONE phase per session — the phase the human names. Never

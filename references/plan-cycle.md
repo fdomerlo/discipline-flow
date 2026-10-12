@@ -96,8 +96,9 @@ that's a `## DECISIÓN ABIERTA` block, same as Step 1.
 
 ## Step 4 — Hand over, do not execute
 
-Write `PLAN-N.md` to the repo root (or inside a dedicated `plans/` directory
-if the project maintains multiple cycles). **Do not start executing a phase in
+Write `PLAN-N.md` inside the canonical `plans/` directory (a legacy
+`PLAN-N.md` at the repo root is still accepted and resolved as fallback).
+**Do not start executing a phase in
 the same turn the plan is created** — the human reviews the plan itself
 first. Never overwrite an existing `PLAN-N.md`: each cycle gets its own
 file; completed ones stay in the repo as history (or can be moved to
@@ -143,5 +144,5 @@ alone. It is still a prose note written by the same agent that did the
 work, not a `manifest.json` a program enforces — no locks, no rollback,
 no protection against two agents writing it at once. Ticked checkboxes
 have the same limit: a convenience, not a guarantee. If a project ever
-needs code-enforced, crash-resilient state instead — see "Upgrade path"
-in SKILL.md.
+needs code-enforced, crash-resilient state instead — see "Upgrade Path"
+in `SKILL.md` and "Alcance Honesto y Garantías" in `README.md`.

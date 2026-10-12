@@ -1,0 +1,9 @@
+# Generated / runtime artifacts — never versioned.
+# The skill's sources are assets/*.template + scripts/ + references/.
+# Instances are (re)generated locally via ./scripts/init.sh --self
+# and ./scripts/sdd.sh; see PROJECT_FOUNDATION.md (single source of truth).
+AGENTS.md
+SESSION.md
+SESSION.md.tmp
+PLAN-*.md
+plans/

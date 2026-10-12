@@ -77,7 +77,7 @@ Discipline Flow es una skill **local al proyecto** (*project-local*) y **complet
 
 ### B. Descubrimiento Semántico y Constitucional
 * **Semántico (`SKILL.md`):** Indexado por agentes compatibles para activar la skill ante solicitudes de planificación o desarrollo disciplinado.
-* **Constitucional (`AGENTS.md` / `CLAUDE.md`):** Anclaje directo en el repositorio. `CLAUDE.md` apunta a `@AGENTS.md` sin duplicar contratos.
+* **Constitucional (`AGENTS.md`):** Anclaje directo en el repositorio, leído nativamente por los agentes actuales.
 
 ### C. Flujo de Trabajo en Tiempo de Ejecución
 
@@ -127,7 +127,7 @@ Para garantizar compatibilidad total sin alterar las reglas preexistentes del us
 * **Si `AGENTS.md` no existe:** Se crea conteniendo el bloque delimitado.
 * **Si ya existe:** Se realiza un **append no destructivo**.
 * **Idempotente:** Reejecutar `init.sh` actualiza **únicamente** la sección entre los marcadores.
-* **`CLAUDE.md`:** Se añade `@AGENTS.md` al final si no está presente.
+* **Fuente única:** `assets/AGENTS.md.template` es canónico; el `AGENTS.md` de cada repo (incluido este, vía `init.sh --self`) se regenera desde él, nunca se edita a mano fuera de los marcadores.
 * **Sobrescritura total:** Solo disponible mediante el flag explícito `--force`.
 
 ---
@@ -147,6 +147,7 @@ discipline-flow/
 │   ├── bootstrap.md              # Guía de inicialización de repositorios y coexistence
 │   ├── definition-of-done.md     # Estándar de calidad y criterios de completitud
 │   ├── doubt-driven-development.md # Metodología de clarificación previa (Fase Cero)
+│   ├── multi-agent.md            # Protocolo de trabajo en paralelo (un agente por fase)
 │   ├── phase-close.md            # Protocolo de cierre de fase y auditoría de diff
 │   ├── plan-cycle.md             # Guía del ciclo de planificación y ejecución por fases
 │   ├── security-checklist.md     # Lista de control de seguridad para agentes de código
@@ -158,9 +159,13 @@ discipline-flow/
     ├── init.sh                   # Script de instalación inicial (scripts + hooks por defecto)
     ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, advance, status)
     ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX y test runner
-    ├── new-plan.sh               # Generador de nuevos planes numerados
+    ├── new-plan.sh               # Generador de nuevos planes numerados (canónico: plans/, root legacy)
+    ├── lib/
+    │   └── sdd-common.sh         # Helpers compartidos SESSION/PLAN (cero dependencias, POSIX sh)
     ├── pre-commit-hook.sh        # Hook Git: Bloquea commits de código en modo plan (.git/hooks/pre-commit)
     └── commit-msg-hook.sh        # Hook Git: Valida Conventional Commits y fase activa (.git/hooks/commit-msg)
+└── tests/
+    └── run.sh                    # Suite propia (bash puro): lib, estado sdd.sh y búsqueda CRIT-XX
 ```
 
 ---
@@ -175,7 +180,7 @@ Activa la disciplina en un proyecto nuevo o existente. Instala scripts y hooks d
 ./scripts/init.sh -t "npm test"
 ```
 
-Esto genera `AGENTS.md`, vincula `CLAUDE.md`, copia `scripts/{sdd.sh, verify-crit.sh, new-plan.sh}` e instala los hooks `.git/hooks/{pre-commit, commit-msg}`. *(Opcionalmente `--no-hooks` si se desean omitir).*
+Esto genera `AGENTS.md`, copia `scripts/{sdd.sh, verify-crit.sh, new-plan.sh, lib/sdd-common.sh}` e instala los hooks `.git/hooks/{pre-commit, commit-msg}`. *(Opcionalmente `--no-hooks` si se desean omitir; `--self` para dogfooding en el propio repo de la skill).*
 
 ### Paso 2: Planificación (Spec First)
 
@@ -223,3 +228,5 @@ Al completar los criterios de la fase:
 * **Es un arnés basado en contratos y gates deterministas:** Funciona instruyendo al agente con reglas operativas inequívocas y protegiendo el repositorio con hooks estándar de Git.
 * **Sin bloqueos de software pesados:** No introduce demonios en segundo plano, locks distribuidos ni parsers de AST. La rigidez la aportan Git, Bash y los tests del propio proyecto.
 * **Resiliencia ante fallos:** No promete transaccionalidad matemática ACID, pero reduce drásticamente el retrabajo y la pérdida de rumbo habitual en agentes autónomos.
+* **Bypass auditable, no invisible:** `--no-verify` sigue disponible para emergencias, pero `verify` falla hasta que los commits de código evasores lleven el token de fase o el humano los despeje.
+* **Multi-agente por coordinación:** un agente por fase con reclamo (`start F1 <agente>`) y branch-per-phase — ver `references/multi-agent.md`. Sin lock duros por diseño.

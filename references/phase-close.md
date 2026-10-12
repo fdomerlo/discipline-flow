@@ -19,7 +19,8 @@ Before writing any report or updating state, you MUST run the verification gate:
 # or directly: scripts/verify-crit.sh PLAN-N.md F<N>
 ```
 
-* If the verification exits with non-zero (missing `CRIT-XX` test or failing suite), **STOP immediately**. Fix the test implementation; do not attempt to bypass or explain away the failure.
+* If the verification exits with non-zero (missing `CRIT-XX` test, failing suite, **or bypass audit finding code commits without the phase token**), **STOP immediately**. Fix the test implementation or rewrite the offending message with the phase token; do not attempt to bypass or explain away the failure.
+* Emergency `--no-verify` commits are not invisible: `verify` scans code commits since the phase-start marker and fails the gate until they carry the token or the human auditor clears them.
 * The script output is your ground truth: copy the generated Markdown criteria table directly into your phase report.
 * `sdd.sh verify` automatically advances `sdd_state` to `verify` upon success.
 

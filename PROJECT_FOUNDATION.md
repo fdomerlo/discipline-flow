@@ -35,5 +35,6 @@ Cualquier agente que opere en este repositorio (Gemini, Antigravity, OpenCode, C
 Si un agente es invocado para expandir, refactorizar o agregar características a `discipline-flow`, debe cumplir obligatoriamente las siguientes restricciones:
 
 * **No introducir dependencias externas:** Queda prohibido el uso de `jq`, `yq`, Python, Node.js o servidores MCP. Toda lógica de parseo debe resolverse con `awk`, `sed` y `grep` nativos.
+* **Fuente única en templates:** `assets/AGENTS.md.template` (y demás `assets/*.template`) son canónicos. El `AGENTS.md` de cualquier repo —incluido este, regenerado vía `init.sh --self`— deriva de ellos y nunca se edita a mano fuera de los bloques administrados. Dos copias de un contrato son dos contratos.
 * **Mantener la Portabilidad:** Los scripts deben ejecutar sin modificaciones en shells bash/zsh bajo entornos Linux (Fedora, Debian, contenedores LXC).
 * **Priorizar el Bloqueo:** Cualquier nueva funcionalidad de validación (ej. chequeo de cobertura de tests) debe implementarse como un bloqueo duro (hard fail) que aborte el proceso si no se cumplen los criterios, nunca como una advertencia (warning) pasiva.
