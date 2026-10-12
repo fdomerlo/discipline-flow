@@ -7,6 +7,8 @@ plan_hash: none
 
 - **Plan:** {{PLAN_FILE}}
 - **Phase:** {{PHASE}}
+- **Agent:** {{AGENT}}
+- **Phase-start commit:** {{PHASE_START_COMMIT}}
 - **Status:** {{STATUS}}
 - **Updated:** {{UPDATED_ISO}}
 - **Base commit:** {{BASE_COMMIT}}

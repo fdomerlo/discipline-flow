@@ -20,7 +20,7 @@ Usage: $(basename "$0") [TITLE] [OPTIONS]
 
 Options:
   -t, --title <title>   Title of the plan (default: "New Cycle")
-  -d, --dir <directory> Target directory for the plan (defaults to 'plans/' if present, otherwise '.')
+  -d, --dir <directory> Target directory for the plan (canonical: 'plans/' when present, otherwise '.')
   -h, --help            Show this help message
 
 Examples:

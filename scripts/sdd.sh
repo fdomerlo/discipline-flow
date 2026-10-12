@@ -4,20 +4,43 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SESSION_FILE="SESSION.md"
 
-# Resuelve el archivo PLAN actual
+# Shared helpers (canonical): scripts/lib/sdd-common.sh.
+# Fallback inline definitions below keep already-bootstrapped projects working.
+if [[ -f "$SCRIPT_DIR/lib/sdd-common.sh" ]]; then
+    # shellcheck source=lib/sdd-common.sh
+    . "$SCRIPT_DIR/lib/sdd-common.sh"
+fi
+
+# Resuelve el archivo PLAN actual (canonical: plans/, legacy: root).
+# Delegates to sdd_resolve_plan() from lib when available.
 resolve_plan_file() {
+    if command -v sdd_resolve_plan >/dev/null 2>&1; then
+        sdd_resolve_plan "$SESSION_FILE"
+        return
+    fi
     local plan=""
     if [[ -f "$SESSION_FILE" ]]; then
         plan=$(grep -oE '([a-zA-Z0-9_.-]+/)?PLAN-[0-9]+(\.[0-9]+)?\.md' "$SESSION_FILE" | head -n 1 || true)
     fi
-    if [[ -z "$plan" || ! -f "$plan" ]]; then
-        plan=$(ls plans/PLAN-*.md PLAN-*.md 2>/dev/null | sort -V | tail -n 1 || true)
+    if [[ -n "$plan" && -f "$plan" ]]; then
+        echo "$plan"
+        return
     fi
+    plan=$(ls plans/PLAN-*.md 2>/dev/null | sort -V | tail -n 1 || true)
+    if [[ -n "$plan" && -f "$plan" ]]; then
+        echo "$plan"
+        return
+    fi
+    plan=$(ls PLAN-*.md 2>/dev/null | sort -V | tail -n 1 || true)
     echo "$plan"
 }
 
 # Calcula sha256 nativo con coreutils
 calc_plan_hash() {
+    if command -v sdd_calc_hash >/dev/null 2>&1; then
+        sdd_calc_hash "$1"
+        return
+    fi
     local plan="$1"
     if [[ -n "$plan" && -f "$plan" ]]; then
         sha256sum "$plan" | awk '{print $1}'
@@ -40,6 +63,7 @@ ensure_session_file() {
 ---
 sdd_state: plan
 active_task: none
+active_agent: none
 plan_hash: $initial_hash
 ---
 # Session Checkpoint
@@ -70,6 +94,10 @@ EOF
 }
 
 get_val() {
+    if command -v sdd_get_val >/dev/null 2>&1; then
+        sdd_get_val "$1" "$SESSION_FILE"
+        return
+    fi
     local key="$1"
     if [[ ! -f "$SESSION_FILE" ]]; then
         echo "none"
@@ -85,20 +113,19 @@ set_val() {
 
     local tmp_file="${SESSION_FILE}.tmp.$$"
     awk -v k="$key" -v v="$val" '
-        BEGIN { in_fm=0; updated=0 }
+        BEGIN { delim=0; updated=0 }
         /^---$/ {
-            in_fm++
+            delim++
+            if (delim == 2 && !updated) {
+                print k ": " v
+                updated=1
+            }
             print
             next
         }
-        in_fm == 1 && $0 ~ ("^" k ":") {
+        delim == 1 && $0 ~ ("^" k ":") {
             print k ": " v
             updated=1
-            next
-        }
-        in_fm == 1 && in_fm_end == 0 && /^---$/ {
-            if (!updated) print k ": " v
-            print
             next
         }
         { print }
@@ -138,13 +165,24 @@ case "$COMMAND" in
 
     start)
         PHASE_OR_TASK="$ARG"
+        AGENT="${3:-}"
         if [[ -z "$PHASE_OR_TASK" ]]; then
             echo "Error: Debes especificar la fase o tarea a iniciar (ej: F1, F2)." >&2
-            echo "Uso: $0 start <fase>  (ej: $0 start F1)" >&2
+            echo "Uso: $0 start <fase> [agente]  (ej: $0 start F1 alice)" >&2
             exit 1
         fi
 
         ensure_session_file
+
+        # Aviso de reclamo multi-agente (coordinación, no bloqueo duro:
+        # el lock real exige daemon/DB y está fuera de alcance — ver SKILL.md).
+        PREV_TASK=$(get_val "active_task")
+        PREV_AGENT=$(get_val "active_agent")
+        if [[ -n "$AGENT" && "$PREV_TASK" == "$PHASE_OR_TASK" && -n "$PREV_AGENT" && "$PREV_AGENT" != "none" && "$PREV_AGENT" != "$AGENT" ]]; then
+            echo "⚠️  La fase '$PHASE_OR_TASK' está reclamada por el agente '$PREV_AGENT'." >&2
+            echo "   Si trabajás en paralelo, coordiná con tu contraparte o usá branch-per-phase." >&2
+            echo "   Ver references/multi-agent.md. Continuando con el reclamo de '$AGENT'." >&2
+        fi
 
         # Validar y congelar hash del plan
         PLAN_FILE=$(resolve_plan_file)
@@ -163,8 +201,25 @@ case "$COMMAND" in
             sed -i "s|^- \*\*Phase:\*\*.*|- \*\*Phase:\*\* $PHASE_OR_TASK|" "$SESSION_FILE" 2>/dev/null || true
         fi
 
+        # Marcador de inicio de fase para la auditoría de bypass (P2-10):
+        # los commits de código sin token de fase posteriores a este commit
+        # se reportan en verify como posible elusión de hooks (--no-verify).
+        PHASE_BASE=$(git rev-parse HEAD 2>/dev/null || echo "uncommitted")
+        if grep -q '^- \*\*Phase-start commit:' "$SESSION_FILE"; then
+            sed -i "s|^- \*\*Phase-start commit:.*|- **Phase-start commit:** $PHASE_BASE|" "$SESSION_FILE" 2>/dev/null || true
+        elif grep -q '^- \*\*Phase:' "$SESSION_FILE"; then
+            sed -i "/^- \*\*Phase:/a - **Phase-start commit:** $PHASE_BASE" "$SESSION_FILE" 2>/dev/null || true
+        else
+            printf -- '- **Phase-start commit:** %s\n' "$PHASE_BASE" >> "$SESSION_FILE"
+        fi
+
         set_val "sdd_state" "execute"
         set_val "active_task" "$PHASE_OR_TASK"
+        if [[ -n "$AGENT" ]]; then
+            set_val "active_agent" "$AGENT"
+        else
+            set_val "active_agent" "none"
+        fi
         echo "🚀 Iniciando fase '$PHASE_OR_TASK' en estado 'execute'."
         echo "🔓 Modificación de código desbloqueada para commits."
         echo "ℹ️  Recuerda incluir '$PHASE_OR_TASK' en tus mensajes de commit (ej: feat($PHASE_OR_TASK): descripción)."
@@ -218,6 +273,7 @@ case "$COMMAND" in
         set_val "sdd_state" "$NEW_STATE"
         if [[ "$NEW_STATE" == "plan" ]]; then
             set_val "active_task" "none"
+            set_val "active_agent" "none"
         fi
         echo "✅ Estado avanzado a: $NEW_STATE"
         ;;
@@ -226,6 +282,8 @@ case "$COMMAND" in
         ensure_session_file
         CURRENT_STATE=$(get_val "sdd_state")
         ACTIVE_TASK=$(get_val "active_task")
+        ACTIVE_AGENT=$(get_val "active_agent")
+        [[ -z "$ACTIVE_AGENT" ]] && ACTIVE_AGENT="none"
         RECORDED_HASH=$(get_val "plan_hash")
         PLAN_FILE=$(resolve_plan_file)
 
@@ -234,6 +292,7 @@ case "$COMMAND" in
         echo "=========================================="
         echo " Estado actual  : $CURRENT_STATE"
         echo " Fase activa    : $ACTIVE_TASK"
+        echo " Agente activo  : $ACTIVE_AGENT"
         echo " Plan activo    : ${PLAN_FILE:-Ninguno}"
         if [[ -n "$PLAN_FILE" && -f "$PLAN_FILE" ]]; then
             CURRENT_HASH=$(calc_plan_hash "$PLAN_FILE")
@@ -247,7 +306,7 @@ case "$COMMAND" in
         fi
         case "$CURRENT_STATE" in
             plan)
-                echo " 🔒 Código      : BLOQUEADO (pre-commit activo para .md/.txt)"
+                echo " 🔒 Código      : BLOQUEADO (solo .md/.txt permitidos, resto bloqueado por pre-commit)"
                 echo " Siguiente paso : ./scripts/sdd.sh start F1"
                 ;;
             execute)
@@ -263,9 +322,10 @@ case "$COMMAND" in
         ;;
 
     *)
-        echo "Uso: $0 {start <fase>|plan [titulo]|verify [fase]|advance <plan|execute|verify>|status}"
+        echo "Uso: $0 {start <fase> [agente]|plan [titulo]|verify [fase]|advance <plan|execute|verify>|status}"
         echo "Ejemplos:"
         echo "  $0 start F1              # Desbloquea código para trabajar en la Fase 1"
+        echo "  $0 start F1 alice        # Igual, reclamando la fase para el agente 'alice'"
         echo "  $0 verify F1             # Corre suite y validación CRIT-XX para Fase 1"
         echo "  $0 plan \"Nueva función\"  # Inicia nuevo plan y bloquea commits de código"
         echo "  $0 status                # Consulta el estado SDD actual"

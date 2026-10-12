@@ -4,11 +4,22 @@
 # Bloquea cambios de código fuente mientras el proyecto esté en fase de diseño/planificación (sdd_state: plan).
 
 SESSION_FILE="SESSION.md"
+
+# Canonical parser when available (dogfooding / bootstrapped projects),
+# inline awk fallback keeps this single-file hook working standalone.
+_GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || printf '.')
+if [ -f "$_GIT_ROOT/scripts/lib/sdd-common.sh" ]; then
+    # shellcheck source=lib/sdd-common.sh
+    . "$_GIT_ROOT/scripts/lib/sdd-common.sh"
+fi
 if [[ ! -f "$SESSION_FILE" ]]; then
     exit 0
 fi
-
-STATE=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { sub(/^sdd_state:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
+if command -v sdd_get_val >/dev/null 2>&1; then
+    STATE=$(sdd_get_val "sdd_state" "$SESSION_FILE" || printf '')
+else
+    STATE=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { sub(/^sdd_state:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
+fi
 
 # Barrera: Prohibido tocar código en fase de planificación
 if [[ "$STATE" == "plan" ]]; then
