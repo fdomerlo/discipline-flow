@@ -2,15 +2,26 @@
 # Installed as .git/hooks/commit-msg by discipline-flow.
 # 1. Rejects commit messages that don't follow Conventional Commits.
 # 2. In SDD 'execute' state, verifies that commit references the active phase/task (e.g. F1).
-# Bypass in an emergency with: git commit --no-verify
+# Bypass in an emergency with: git commit --no-verify (flagged later by verify's bypass audit).
 
 msg_file="$1"
 first_line=$(head -n1 "$msg_file")
 
-# Allow native git automated operations and comments/empty lines
+# Allow native git automated operations and comments/empty lines.
+# NOTE: Revert* is intentionally NOT auto-allowed: `git revert` creates a
+# real code change, so in 'execute' state it must carry the phase token
+# (usually inherited from the reverted message). Merge/fixup/squash are
+# git mechanics and stay exempt.
 case "$first_line" in
-  Merge*|revert*|Revert*|"fixup!"*|"squash!"*|"#"*|"")
+  Merge*|"fixup!"*|"squash!"*|"#"*|"")
     exit 0
+    ;;
+esac
+
+REVERT_MSG=0
+case "$first_line" in
+  Revert*|revert*)
+    REVERT_MSG=1
     ;;
 esac
 
@@ -18,23 +29,41 @@ esac
 types="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release"
 pattern="^($types)(\([a-zA-Z0-9_.-]+\))?!?: .+"
 
-if ! echo "$first_line" | grep -Eq "$pattern"; then
-  echo "❌ commit-msg hook: El formato del mensaje no cumple Conventional Commits."
-  echo "  Mensaje recibido: $first_line"
-  echo "  Formato esperado: <type>(<scope>): <descripción>"
-  echo "  Tipos válidos:    feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release"
-  echo "  Bypass:           git commit --no-verify"
-  exit 1
+if [ "$REVERT_MSG" = "0" ]; then
+  if ! echo "$first_line" | grep -Eq "$pattern"; then
+    echo "❌ commit-msg hook: El formato del mensaje no cumple Conventional Commits."
+    echo "  Mensaje recibido: $first_line"
+    echo "  Formato esperado: <type>(<scope>): <descripción>"
+    echo "  Tipos válidos:    feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release"
+    echo "  Bypass:           git commit --no-verify (será auditado en verify)"
+    exit 1
+  fi
 fi
 
 SESSION_FILE="SESSION.md"
+
+# Canonical parser when available, inline awk fallback otherwise.
+_GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || printf '.')
+if [ -f "$_GIT_ROOT/scripts/lib/sdd-common.sh" ]; then
+    # shellcheck source=lib/sdd-common.sh
+    . "$_GIT_ROOT/scripts/lib/sdd-common.sh"
+fi
+
+_cget() {
+    if command -v sdd_get_val >/dev/null 2>&1; then
+        sdd_get_val "$1" "$SESSION_FILE"
+    else
+        awk -v k="$1" '/^---$/ { if (c++ == 1) exit } c==1 && $0 ~ ("^" k ":") { sub("^" k ":[[:space:]]*", ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE"
+    fi
+}
+
 if [ -f "$SESSION_FILE" ]; then
     # Extract sdd_state
-    sdd_state=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { sub(/^sdd_state:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
+    sdd_state=$(_cget "sdd_state")
 
     if [ "$sdd_state" = "execute" ]; then
         # Extract active_task (e.g. F1)
-        active_task=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^active_task:/ { sub(/^active_task:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
+        active_task=$(_cget "active_task")
 
         if [ "$active_task" = "none" ] || [ -z "$active_task" ]; then
             echo "❌ commit-msg hook: El estado SDD es 'execute' pero no hay ninguna fase activa en SESSION.md."
