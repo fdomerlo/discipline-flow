@@ -181,7 +181,7 @@ Activa la disciplina en un proyecto nuevo o existente. Instala scripts y hooks d
 ./scripts/init.sh -t "npm test"
 ```
 
-Esto genera `AGENTS.md`, copia `scripts/{sdd.sh, verify-crit.sh, new-plan.sh, lib/sdd-common.sh}` e instala los hooks `.git/hooks/{pre-commit, commit-msg}`. *(Opcionalmente `--no-hooks` si se desean omitir; `--self` para dogfooding en el propio repo de la skill).*
+Esto genera `AGENTS.md` (apuntando a la skill in-place), e instala los hooks `.git/hooks/{pre-commit, commit-msg}` con esa ruta incorporada. Los scripts y assets **no se copian**: se usan desde el directorio de la skill. *(Opcionalmente `--no-hooks` si se desean omitir; `--self` para dogfooding en el propio repo de la skill).*
 
 ### Paso 2: Planificación (Spec First)
 
@@ -245,6 +245,8 @@ Cada release (tag `X.Y.Z`) publica automáticamente `discipline-flow-<versión>.
 | `SKILL.md`, `scripts/`, `assets/`, `references/`, `VERSION` | `.git/`, `tests/`, `README.md`, `PROJECT_FOUNDATION.md` (desarrollo de la skill, no runtime) |
 
 La estructura interna se conserva intacta (`SKILL.md` referencia `references/` y `scripts/` por rutas relativas).
+
+Instalada la skill, el proyecto la referencia en su ubicación: `init.sh` escribe esa ruta en `AGENTS.md` y la incorpora a los hooks. Solo `AGENTS.md`, `plans/` y `SESSION.md` viven en el proyecto; `scripts/` y `assets/` nunca se copian.
 
 ### Métodos de instalación
 

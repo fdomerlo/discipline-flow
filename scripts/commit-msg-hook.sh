@@ -43,10 +43,13 @@ fi
 SESSION_FILE="SESSION.md"
 
 # Canonical parser when available, inline awk fallback otherwise.
+# {{SKILL_PATH}} is baked by init.sh at install time (skill dir relative
+# to the repo root); an unbaked source simply misses and falls back.
 _GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || printf '.')
-if [ -f "$_GIT_ROOT/scripts/lib/sdd-common.sh" ]; then
+_SKILL_LIB="$_GIT_ROOT/{{SKILL_PATH}}/scripts/lib/sdd-common.sh"
+if [ -f "$_SKILL_LIB" ]; then
     # shellcheck source=lib/sdd-common.sh
-    . "$_GIT_ROOT/scripts/lib/sdd-common.sh"
+    . "$_SKILL_LIB"
 fi
 
 _cget() {
@@ -67,7 +70,7 @@ if [ -f "$SESSION_FILE" ]; then
 
         if [ "$active_task" = "none" ] || [ -z "$active_task" ]; then
             echo "❌ commit-msg hook: El estado SDD es 'execute' pero no hay ninguna fase activa en SESSION.md."
-            echo "👉 Inicia la fase con: ./scripts/sdd.sh start F1  (o F2, etc.)"
+            echo "👉 Inicia la fase con: {{SKILL_PATH}}/scripts/sdd.sh start F1  (o F2, etc.)"
             exit 1
         fi
 
@@ -78,7 +81,7 @@ if [ -f "$SESSION_FILE" ]; then
             echo "  Ejemplos válidos:"
             echo "    feat($active_task): implementar rotación de tokens"
             echo "    test: agregar caso de prueba para expiración ($active_task)"
-            echo "👉 Ajusta el mensaje o cambia de fase con: ./scripts/sdd.sh start <fase>"
+            echo "👉 Ajusta el mensaje o cambia de fase con: {{SKILL_PATH}}/scripts/sdd.sh start <fase>"
             exit 1
         fi
     fi

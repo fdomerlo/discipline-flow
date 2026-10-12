@@ -27,12 +27,13 @@ Options:
       --with-hooks             Explicitly enable git hooks installation (default behavior)
       --self                   Dogfooding: bootstrap this skill repo itself
                                (TARGET_DIR=<skill-dir>, test-cmd defaults to ./tests/run.sh)
-  -f, --force                  Overwrite existing files and scripts (default: safe append/update)
+  -f, --force                  Overwrite the AGENTS.md contract block (default: safe append/update)
   -h, --help                   Show this help message
 
 Behavior:
   - Bootstraps AGENTS.md preserving custom rules inside managed delimiters.
-  - Installs mandatory runtime scripts (scripts/sdd.sh, scripts/verify-crit.sh, scripts/new-plan.sh, scripts/lib/sdd-common.sh).
+  - References skill scripts and assets in place (never copied): the contract
+    and hooks point at the skill directory relative to the target repo.
   - Installs deterministic git hooks (.git/hooks/pre-commit and .git/hooks/commit-msg).
 
 Examples:
@@ -89,7 +90,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# --self: dogfood this skill repo (hooks + lib, no AGENTS prompt needed)
+# --self: dogfood this skill repo (AGENTS.md + hooks, scripts stay in place)
 if [[ "$SELF_MODE" == true ]]; then
   TARGET_DIR="$SKILL_DIR"
   if [[ -z "$TEST_COMMAND" ]]; then
@@ -104,6 +105,15 @@ if [[ ! -d "$TARGET_DIR" ]]; then
   mkdir -p "$TARGET_DIR"
   TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
 fi
+
+# Skill path as seen from the target repo (scripts/assets run in place).
+if command -v realpath >/dev/null 2>&1; then
+  SKILL_REL="$(realpath --relative-to="$TARGET_DIR" "$SKILL_DIR" 2>/dev/null || echo "$SKILL_DIR")"
+else
+  SKILL_REL="$SKILL_DIR"
+fi
+SKILL_ESC="${SKILL_REL//\\/\\\\}"
+SKILL_ESC="${SKILL_ESC//&/\\&}"
 
 # Fallback for PROJECT_NAME
 if [[ -z "$PROJECT_NAME" ]]; then
@@ -135,6 +145,7 @@ content="$(<"$TEMPLATE_FILE")"
 content="${content//\{\{PROJECT_NAME\}\}/$PROJECT_NAME}"
 content="${content//\{\{TEST_COMMAND\}\}/$TEST_COMMAND}"
 content="${content//\{\{COMMIT_TYPES\}\}/$COMMIT_TYPES}"
+content="${content//\{\{SKILL_PATH\}\}/$SKILL_REL}"
 
 START_MARKER="<!-- BEGIN DISCIPLINE-FLOW -->"
 END_MARKER="<!-- END DISCIPLINE-FLOW -->"
@@ -175,33 +186,30 @@ else
   fi
 fi
 
-# Install mandatory SDD scripts in target project
-SCRIPTS_DEST_DIR="$TARGET_DIR/scripts"
-mkdir -p "$SCRIPTS_DEST_DIR"
+# Skill scripts/assets are used in place from the skill directory — never
+# copied into the target. Flag legacy vendored copies from older versions.
+for legacy in scripts/sdd.sh scripts/verify-crit.sh scripts/new-plan.sh scripts/lib/sdd-common.sh; do
+  if [[ -f "$TARGET_DIR/$legacy" ]] && ! [[ "$TARGET_DIR/$legacy" -ef "$SKILL_DIR/$legacy" ]]; then
+    echo "Notice: $TARGET_DIR/$legacy is a legacy vendored copy; scripts now run in place from '$SKILL_REL' — you may delete it."
+  fi
+done
 
-install_script() {
+# Install Git hooks (pre-commit & commit-msg) by default.
+# Git only runs hooks from .git/hooks, so these are real copies with the
+# skill path baked in ({{SKILL_PATH}} placeholder).
+install_hook() {
   local src="$1"
   local dest="$2"
+  local desc="$3"
   if [[ ! -f "$src" ]]; then
-    echo "Warning: Source script '$src' not found. Skipping." >&2
-  elif [[ "$src" -ef "$dest" ]]; then
-    echo "Notice: $dest is the skill source itself (--self), left in place."
-  elif [[ -f "$dest" && "$FORCE" != true ]]; then
-    echo "Notice: $dest already exists, left untouched (use --force to overwrite)."
-  else
-    cp "$src" "$dest"
-    chmod +x "$dest"
-    echo "Installed: $dest"
+    echo "Warning: Source hook '$src' not found. Skipping." >&2
+    return 0
   fi
+  sed "s|{{SKILL_PATH}}|${SKILL_ESC}|g" "$src" > "$dest"
+  chmod +x "$dest"
+  echo "Installed git hook: $dest ($desc)"
 }
 
-install_script "$SKILL_DIR/scripts/sdd.sh" "$SCRIPTS_DEST_DIR/sdd.sh"
-install_script "$SKILL_DIR/scripts/verify-crit.sh" "$SCRIPTS_DEST_DIR/verify-crit.sh"
-install_script "$SKILL_DIR/scripts/new-plan.sh" "$SCRIPTS_DEST_DIR/new-plan.sh"
-mkdir -p "$SCRIPTS_DEST_DIR/lib"
-install_script "$SKILL_DIR/scripts/lib/sdd-common.sh" "$SCRIPTS_DEST_DIR/lib/sdd-common.sh"
-
-# Install Git hooks (pre-commit & commit-msg) by default
 if [[ "$INSTALL_HOOKS" == true ]]; then
   GIT_DIR="$TARGET_DIR/.git"
   if [[ ! -d "$GIT_DIR" ]]; then
@@ -213,28 +221,16 @@ if [[ "$INSTALL_HOOKS" == true ]]; then
   mkdir -p "$HOOKS_DIR"
 
   # 1. Install pre-commit hook (guards code edits during plan phase)
-  PRE_COMMIT_SRC="$SKILL_DIR/scripts/pre-commit-hook.sh"
-  PRE_COMMIT_DEST="$HOOKS_DIR/pre-commit"
-  if [[ -f "$PRE_COMMIT_SRC" ]]; then
-    cp "$PRE_COMMIT_SRC" "$PRE_COMMIT_DEST"
-    chmod +x "$PRE_COMMIT_DEST"
-    echo "Installed git hook: $PRE_COMMIT_DEST (blocks code commits during 'plan' phase)"
-  fi
+  install_hook "$SKILL_DIR/scripts/pre-commit-hook.sh" "$HOOKS_DIR/pre-commit" "blocks code commits during 'plan' phase"
 
   # 2. Install commit-msg hook (enforces Conventional Commits & active phase)
-  COMMIT_MSG_SRC="$SKILL_DIR/scripts/commit-msg-hook.sh"
-  COMMIT_MSG_DEST="$HOOKS_DIR/commit-msg"
-  if [[ -f "$COMMIT_MSG_SRC" ]]; then
-    cp "$COMMIT_MSG_SRC" "$COMMIT_MSG_DEST"
-    chmod +x "$COMMIT_MSG_DEST"
-    echo "Installed git hook: $COMMIT_MSG_DEST (enforces conventional commits & active phase reference)"
-  fi
+  install_hook "$SKILL_DIR/scripts/commit-msg-hook.sh" "$HOOKS_DIR/commit-msg" "enforces conventional commits & active phase reference"
 fi
 
 echo ""
 echo "Bootstrap complete for '$PROJECT_NAME'."
 echo "Contract file: $AGENTS_TARGET"
-echo "Scripts:       $SCRIPTS_DEST_DIR/{sdd.sh, verify-crit.sh, new-plan.sh, lib/sdd-common.sh}"
+echo "Skill runtime: $SKILL_DIR (used in place as '$SKILL_REL')"
 if [[ "$INSTALL_HOOKS" == true ]]; then
   echo "Git hooks:     $TARGET_DIR/.git/hooks/{pre-commit, commit-msg}"
 fi

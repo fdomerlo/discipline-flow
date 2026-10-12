@@ -7,10 +7,13 @@ SESSION_FILE="SESSION.md"
 
 # Canonical parser when available (dogfooding / bootstrapped projects),
 # inline awk fallback keeps this single-file hook working standalone.
+# {{SKILL_PATH}} is baked by init.sh at install time (skill dir relative
+# to the repo root); an unbaked source simply misses and falls back.
 _GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || printf '.')
-if [ -f "$_GIT_ROOT/scripts/lib/sdd-common.sh" ]; then
+_SKILL_LIB="$_GIT_ROOT/{{SKILL_PATH}}/scripts/lib/sdd-common.sh"
+if [ -f "$_SKILL_LIB" ]; then
     # shellcheck source=lib/sdd-common.sh
-    . "$_GIT_ROOT/scripts/lib/sdd-common.sh"
+    . "$_SKILL_LIB"
 fi
 if [[ ! -f "$SESSION_FILE" ]]; then
     exit 0
@@ -33,7 +36,7 @@ if [[ "$STATE" == "plan" ]]; then
         echo "$STAGED_CODE" | sed 's/^/  - /'
         echo ""
         echo "👉 Para iniciar la fase y desbloquear código, ejecuta:"
-        echo "   ./scripts/sdd.sh start F1   (o la fase correspondiente)"
+        echo "   {{SKILL_PATH}}/scripts/sdd.sh start F1   (o la fase correspondiente)"
         echo ""
         echo "   (En caso de emergencia extrema, puedes eludir con: git commit --no-verify)"
         exit 1

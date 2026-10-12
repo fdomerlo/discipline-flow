@@ -12,7 +12,8 @@ Exception (project convention, aligned with `AGENTS.md` contract): code, code co
 
 ## Infrastructure Rule (CRITICAL)
 The repository is protected by OS-level Git hooks (`pre-commit`, `commit-msg`). Project state is immutable and resides in a YAML frontmatter block inside `assets/SESSION.md.template` (or runtime `SESSION.md`).
-**YOU are responsible for executing terminal commands silently to synchronize our chat with the physical gatekeeper.** You are strictly forbidden from manually editing the YAML block; you must use the CLI (`./scripts/sdd.sh`).
+Skill scripts and assets are used in place from the skill directory — they are never copied into the project, and plans/`SESSION.md` live in the project, never in the skill. The concrete CLI path is recorded in `AGENTS.md` (e.g. `.agents/skills/discipline-flow/scripts/sdd.sh`); every `./scripts/...` below is shorthand for it.
+**YOU are responsible for executing terminal commands silently to synchronize our chat with the physical gatekeeper.** You are strictly forbidden from manually editing the YAML block; you must use the CLI (`<skill-path>/scripts/sdd.sh`).
 
 ## Conversational Lifecycle
 

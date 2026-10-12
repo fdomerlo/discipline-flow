@@ -1,5 +1,6 @@
 <!-- BEGIN DISCIPLINE-FLOW -->
 # {{PROJECT_NAME}} — Contributor & Executor Contract (Discipline Flow)
+<!-- Skill location: {{SKILL_PATH}} — scripts and assets are used in place, never copied. -->
 
 ## Always
 
@@ -15,7 +16,7 @@
 - **PROHIBITED: Never hand-edit state files.** You are strictly forbidden
   from manually editing the YAML frontmatter block (`--- ... ---`) of `SESSION.md`.
   All SDD state changes (`plan`, `execute`, `verify`) and active phase updates
-  must be executed exclusively via `./scripts/sdd.sh`.
+   must be executed exclusively via `{{SKILL_PATH}}/scripts/sdd.sh`.
 - No new dependencies without explicit human approval.
 
 ## Plan mode
@@ -27,7 +28,7 @@ cycle. This changes the rules:
 - Work on exactly ONE phase per session — the phase the human names. Never
   start the next phase, even if it looks trivial from here.
 - **Phase activation**: Before modifying code for a phase, activate it via:
-  `./scripts/sdd.sh start F<N>` (e.g. `./scripts/sdd.sh start F1`).
+  `{{SKILL_PATH}}/scripts/sdd.sh start F<N>` (e.g. `{{SKILL_PATH}}/scripts/sdd.sh start F1`).
   This sets `sdd_state: execute` in `SESSION.md` and unblocks the git `pre-commit` hook.
 - **Phase-scoped commits**: Every commit message in this phase must reference the active phase
   (e.g. `feat(F1): implement token rotation` or `test: add edge cases (F1)`). The `commit-msg`
@@ -43,14 +44,14 @@ cycle. This changes the rules:
   exact identifier (e.g. `test("CRIT-01: ...")` or `def test_crit_01_...()`).
 - **Strict ticking rule (`- [x]`)**: you are strictly forbidden from ticking
   (`- [x]`) an automated criterion on your own say-so. Before ticking any,
-  run the mandatory gate: `./scripts/sdd.sh verify F<N>` (or `scripts/verify-crit.sh PLAN-N.md F<N>`).
+  run the mandatory gate: `{{SKILL_PATH}}/scripts/sdd.sh verify F<N>` (or `{{SKILL_PATH}}/scripts/verify-crit.sh PLAN-N.md F<N>`).
   Tick only what the script confirms — if it exits non-zero, STOP and fix the
   underlying issue (missing test, failing test); never tick, bypass, or
   explain the failure away. Leave anything only a human can verify unticked
   (e.g. `CRIT-03: (manual) ...`) and explicitly state that it is pending
   human verification.
 - At phase end, report:
-  1. Criteria demonstration mapping: the exact table `scripts/verify-crit.sh`
+  1. Criteria demonstration mapping: the exact table `{{SKILL_PATH}}/scripts/verify-crit.sh`
      printed, plus any manual criteria left unticked for human audit.
   2. Files changed (in a clear summary table).
   3. Tests added (and what attack, regression, or behavior each one guards against).
@@ -77,7 +78,7 @@ current phase in progress. Before doing anything else:
 5. Resume from "Next action" instead of re-deriving it from the plan.
 
 At the end of every session — whether or not the phase closed — rewrite
-`SESSION.md` body from `assets/SESSION.md.template`. Write it atomically:
+`SESSION.md` body from `{{SKILL_PATH}}/assets/SESSION.md.template`. Write it atomically:
 save the new content to `SESSION.md.tmp`, then `mv SESSION.md.tmp
 SESSION.md`. Never edit `SESSION.md` in place. `Base commit` is always
 `git rev-parse HEAD` at write time and `Updated` the current UTC

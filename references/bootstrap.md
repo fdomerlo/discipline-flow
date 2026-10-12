@@ -18,15 +18,12 @@ Options:
 - `-f, --force`: Overwrite existing contract files completely (by default, `init.sh` safely appends/updates the delimited block).
 
 **What gets installed:**
-1. `AGENTS.md` with the managed contract block (read natively by current
-   Claude Code ≥ v2.1.277, Codex, Cursor, OpenCode and other agents — no
-   `CLAUDE.md` shim is created).
-2. Runtime scripts in `scripts/`:
-   - `scripts/sdd.sh` (unified CLI controller).
-   - `scripts/verify-crit.sh` (CRIT-XX determinism gate).
-   - `scripts/new-plan.sh` (plan scaffolding).
-   - `scripts/lib/sdd-common.sh` (shared SESSION/PLAN helpers, zero deps).
-3. Deterministic Git hooks in `.git/hooks/`:
+1. `AGENTS.md` with the managed contract block, pointing at the skill
+   directory in place (read natively by current Claude Code ≥ v2.1.277,
+   Codex, Cursor, OpenCode and other agents — no `CLAUDE.md` shim is created).
+   Skill scripts and assets are referenced where they live, never copied.
+2. Deterministic Git hooks in `.git/hooks/` (the only real copies: Git
+   mandates this location) with the skill path baked in:
    - `pre-commit`: Blocks code commits during `sdd_state: plan`.
    - `commit-msg`: Enforces Conventional Commits and reference to the active phase (e.g. `F1`).
 
@@ -44,19 +41,24 @@ Options:
      out to use `unittest` or `go test`).
    - `{{COMMIT_TYPES}}` — default: `feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert, release`.
      Ask only if the project has an existing convention to match.
+   - `{{SKILL_PATH}}` — skill directory relative to the repo root
+     (e.g. `.agents/skills/discipline-flow`, or `.` when bootstrapping
+     the skill repo itself). Computed, never guessed.
 3. Write or append to `AGENTS.md` at the repo root:
    - If `AGENTS.md` does not exist: write the filled template directly.
    - If `AGENTS.md` already exists: do NOT overwrite it. Append the filled template enclosed between `<!-- BEGIN DISCIPLINE-FLOW -->` and `<!-- END DISCIPLINE-FLOW -->` at the end of the file.
 4. Install git hooks (`pre-commit` and `commit-msg`):
-   - Copy `<skill-dir>/scripts/pre-commit-hook.sh` to `.git/hooks/pre-commit`, `chmod +x`.
-   - Copy `<skill-dir>/scripts/commit-msg-hook.sh` to `.git/hooks/commit-msg`, `chmod +x`.
+   - Copy `<skill-dir>/scripts/pre-commit-hook.sh` to `.git/hooks/pre-commit`, `chmod +x`,
+     replacing `{{SKILL_PATH}}` with the skill directory relative to the repo root.
+   - Copy `<skill-dir>/scripts/commit-msg-hook.sh` to `.git/hooks/commit-msg`, `chmod +x`,
+     same replacement.
    - Inform the user that in an emergency, hooks can be bypassed with `git commit --no-verify`.
-5. Copy runtime scripts to `scripts/`:
-   - `<skill-dir>/scripts/sdd.sh`, `<skill-dir>/scripts/verify-crit.sh`,
-     `<skill-dir>/scripts/new-plan.sh` → `scripts/`.
-   - `<skill-dir>/scripts/lib/sdd-common.sh` → `scripts/lib/` (required:
-     shared parser; hooks and CLI fall back to inline logic without it,
-     but canonical behavior needs it).
+5. Reference, don't copy: `sdd.sh`, `verify-crit.sh`, `new-plan.sh` and
+   `lib/sdd-common.sh` stay in `<skill-dir>/scripts/` and run from there.
+   Plans (`plans/PLAN-N.md`) and `SESSION.md` live in the project root —
+   never inside the skill directory. If the project carries legacy vendored
+   copies under its own `scripts/`, they can be deleted once `AGENTS.md`
+   points at the skill path.
 6. Report what was written and stop. Don't start writing project code in
    the same turn unless the user asked for that too.
 
