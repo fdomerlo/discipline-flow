@@ -43,11 +43,12 @@ Immediately below the ticked criteria or in chat:
 
 ### 4. Refresh checkpoint & STOP
 
-Rewrite `SESSION.md`:
+`sdd.sh verify` already refreshed the machine-owned fields (`Status:
+phase-closed, awaiting human audit`, `Next action`, `Updated`). Now rewrite
+the agent-owned prose in `SESSION.md` (completed work, current state, open
+decisions, deviations):
 
-* `Status: phase-closed, awaiting human audit`
-* `Next action`: what starts after human approval.
-* `Human review: pending`
+* Verify `Human review: pending` is set (it blocks resuming until the audit happens).
 
 **STOP.** Do not start the next phase. The human audits the git diff and reviews the report first.
 

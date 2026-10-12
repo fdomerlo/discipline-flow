@@ -134,6 +134,55 @@ set_val() {
     mv "$tmp_file" "$SESSION_FILE"
 }
 
+# CLI path as invoked from the project root (for body hints).
+cli_path() {
+    if command -v realpath >/dev/null 2>&1; then
+        realpath --relative-to=. "$SCRIPT_DIR/sdd.sh" 2>/dev/null || echo "./scripts/sdd.sh"
+    else
+        echo "./scripts/sdd.sh"
+    fi
+}
+
+# Refresh machine-owned body fields of SESSION.md after a state transition.
+# Only touches Status/Updated/Base-commit bullets and the Next-action section;
+# free prose (Completed, Working state, Open decisions) belongs to the agent.
+# Usage: refresh_body "<status>" "<next-action>" ["base"]
+refresh_body() {
+    local new_status="$1"
+    local new_next="$2"
+    local set_base="${3:-}"
+    local f="$SESSION_FILE"
+    [[ -f "$f" ]] || return 0
+
+    if [[ -n "$new_status" ]] && grep -q '^- \*\*Status:' "$f"; then
+        sed -i "s|^- \*\*Status:.*|- **Status:** $new_status|" "$f" 2>/dev/null || true
+    fi
+    if grep -q '^- \*\*Updated:' "$f"; then
+        sed -i "s|^- \*\*Updated:.*|- **Updated:** $(date -u +"%Y-%m-%dT%H:%M:%SZ")|" "$f" 2>/dev/null || true
+    fi
+    if [[ -n "$set_base" ]]; then
+        local head
+        head=$(git rev-parse HEAD 2>/dev/null || echo "uncommitted")
+        if grep -q '^- \*\*Base commit:' "$f"; then
+            sed -i "s|^- \*\*Base commit:.*|- **Base commit:** $head|" "$f" 2>/dev/null || true
+        fi
+    fi
+    if [[ -n "$new_next" ]]; then
+        local tmp_next="${f}.tmp.$$"
+        if grep -q '^## Next action' "$f"; then
+            awk -v nxt="$new_next" '
+                /^## Next action[[:space:]]*$/ {print; print ""; print nxt; print ""; in_next=1; next}
+                in_next && /^## / {in_next=0}
+                in_next {next}
+                {print}
+            ' "$f" > "$tmp_next"
+            mv "$tmp_next" "$f"
+        else
+            printf '\n## Next action\n\n%s\n' "$new_next" >> "$f"
+        fi
+    fi
+}
+
 COMMAND="${1:-status}"
 ARG="${2:-}"
 
@@ -156,7 +205,9 @@ case "$COMMAND" in
 
         set_val "sdd_state" "plan"
         set_val "active_task" "none"
+        set_val "active_agent" "none"
         set_val "plan_hash" "$NEW_HASH"
+        refresh_body "Plan review, awaiting approval" "Revisar y aprobar el plan; luego arrancar la primera fase ($(cli_path) start F1)" "base"
 
         echo "📋 Modo PLAN activo. El código fuente está bloqueado para commits hasta iniciar una fase."
         echo "🔒 Hash de especificación registrado: ${NEW_HASH:0:12}..."
@@ -220,6 +271,7 @@ case "$COMMAND" in
         else
             set_val "active_agent" "none"
         fi
+        refresh_body "Phase $PHASE_OR_TASK in progress" "Completar los criterios de $PHASE_OR_TASK y correr $(cli_path) verify $PHASE_OR_TASK" "base"
         echo "🚀 Iniciando fase '$PHASE_OR_TASK' en estado 'execute'."
         echo "🔓 Modificación de código desbloqueada para commits."
         echo "ℹ️  Recuerda incluir '$PHASE_OR_TASK' en tus mensajes de commit (ej: feat($PHASE_OR_TASK): descripción)."
@@ -250,6 +302,7 @@ case "$COMMAND" in
             VERIFY_EXIT=$?
             if [[ $VERIFY_EXIT -eq 0 ]]; then
                 set_val "sdd_state" "verify"
+                refresh_body "phase-closed, awaiting human audit" "Auditar el diff humano de ${PHASE_ID:-la fase} y aprobar; luego iniciar la siguiente fase"
                 echo "✅ Verificación exitosa. Estado avanzado a: verify"
                 echo "🛑 ALTO: Detén la ejecución y presenta el reporte para auditoría humana del diff."
             else
@@ -258,6 +311,7 @@ case "$COMMAND" in
         else
             echo "Warning: $SCRIPT_DIR/verify-crit.sh no encontrado o no ejecutable." >&2
             set_val "sdd_state" "verify"
+            refresh_body "phase-closed, awaiting human audit" "Auditar el diff humano de ${PHASE_ID:-la fase} y aprobar; luego iniciar la siguiente fase"
             echo "Estado cambiado a verify."
         fi
         ;;
@@ -274,6 +328,9 @@ case "$COMMAND" in
         if [[ "$NEW_STATE" == "plan" ]]; then
             set_val "active_task" "none"
             set_val "active_agent" "none"
+            refresh_body "Plan review, awaiting approval" "Revisar y aprobar el plan; luego arrancar la primera fase ($(cli_path) start F1)" "base"
+        else
+            refresh_body "" ""
         fi
         echo "✅ Estado avanzado a: $NEW_STATE"
         ;;
