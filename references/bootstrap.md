@@ -62,6 +62,15 @@ Options:
 6. Report what was written and stop. Don't start writing project code in
    the same turn unless the user asked for that too.
 
+## Resetting a project
+
+If the project drifted and must start over, `<skill-dir>/scripts/reset.sh`
+removes every trace (plans including archive, `SESSION.md`, contract block,
+skill hooks, legacy vendored copies) while preserving foreign hooks, custom
+rules and modified scripts with a warning. Interactive by default
+(`--dry-run` to preview, `--force` for non-interactive). Re-run `init.sh`
+afterwards for a clean bootstrap.
+
 ## Why each rule in the contract exists (for when the user asks)
 
 - **Conventional commits** — makes the history itself a queryable log of

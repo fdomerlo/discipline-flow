@@ -267,3 +267,12 @@ Luego, bootstrap desde la ruta instalada (no hace falta entrar al directorio):
 ```
 
 La versión instalada se comprueba en el archivo `VERSION` (tag + commit exacto) incluido en el zip, o con `git describe` dentro del submódulo.
+
+### Empezar de cero
+
+Si el proyecto se desvió y querés eliminar toda inicialización (planes, estado, bloque de contrato, hooks):
+```bash
+<skill-path>/scripts/reset.sh -d /ruta/al/proyecto   # interactivo, con inventario previo
+<skill-path>/scripts/reset.sh -d /ruta/al/proyecto --dry-run   # solo lista, no toca nada
+```
+Preserva con aviso lo ajeno (hooks propios, reglas fuera del bloque, scripts modificados). Después, `init.sh` arranca limpio.
