@@ -157,6 +157,7 @@ discipline-flow/
 │   └── testing-patterns.md       # Patrones de testing y trazabilidad CRIT-XX
 └── scripts/
     ├── init.sh                   # Script de instalación inicial (scripts + hooks por defecto)
+    ├── package.sh                # Generador del distribuible zip versionado (release)
     ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, advance, status)
     ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX y test runner
     ├── new-plan.sh               # Generador de nuevos planes numerados (canónico: plans/, root legacy)
@@ -230,3 +231,37 @@ Al completar los criterios de la fase:
 * **Resiliencia ante fallos:** No promete transaccionalidad matemática ACID, pero reduce drásticamente el retrabajo y la pérdida de rumbo habitual en agentes autónomos.
 * **Bypass auditable, no invisible:** `--no-verify` sigue disponible para emergencias, pero `verify` falla hasta que los commits de código evasores lleven el token de fase o el humano los despeje.
 * **Multi-agente por coordinación:** un agente por fase con reclamo (`start F1 <agente>`) y branch-per-phase — ver `references/multi-agent.md`. Sin lock duros por diseño.
+
+---
+
+## 9. Distribución e Instalación en Proyectos
+
+Cada release (tag `X.Y.Z`) publica automáticamente `discipline-flow-<versión>.zip` + `sha256sums.txt` en su GitHub Release (workflow `release-dist`: verifica suite, empaqueta vía `scripts/package.sh`, adjunta). No copiar nunca el repo con su `.git` (2.8M de historial de desarrollo que ningún agente necesita).
+
+### Qué contiene el zip (y qué no)
+
+| Incluye | Excluye |
+| :--- | :--- |
+| `SKILL.md`, `scripts/`, `assets/`, `references/`, `VERSION` | `.git/`, `tests/`, `README.md`, `PROJECT_FOUNDATION.md` (desarrollo de la skill, no runtime) |
+
+La estructura interna se conserva intacta (`SKILL.md` referencia `references/` y `scripts/` por rutas relativas).
+
+### Métodos de instalación
+
+**A. Submódulo git (recomendado):** versiona la skill por commit y actualizar es un `pull`.
+```bash
+git submodule add https://github.com/fdomerlo/discipline-flow.git .agents/skills/discipline-flow
+git -C .agents/skills/discipline-flow checkout 1.6.0
+```
+
+**B. Zip de release:** para proyectos sin submódulos.
+```bash
+unzip discipline-flow-1.6.0.zip -d .agents/skills/
+```
+
+Luego, bootstrap desde la ruta instalada (no hace falta entrar al directorio):
+```bash
+.agents/skills/discipline-flow/scripts/init.sh -t "<comando de tests>" -d /ruta/al/proyecto
+```
+
+La versión instalada se comprueba en el archivo `VERSION` (tag + commit exacto) incluido en el zip, o con `git describe` dentro del submódulo.

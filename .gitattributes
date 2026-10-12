@@ -1,0 +1,9 @@
+# Distribución de la skill: solo estos paths viajan en el zip de release
+# (vía `git archive`, usado por scripts/package.sh y el workflow de release).
+# Todo lo demás es desarrollo de la skill, no runtime del consumidor.
+tests/ export-ignore
+.github/ export-ignore
+README.md export-ignore
+PROJECT_FOUNDATION.md export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore

@@ -1,0 +1,35 @@
+name: release-dist
+
+on:
+  push:
+    tags:
+      - '[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax check
+        run: |
+          for f in scripts/*.sh scripts/lib/*.sh tests/*.sh; do
+            bash -n "$f" || exit 1
+          done
+      - name: Own test suite
+        run: ./tests/run.sh
+
+  package:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build distributable zip
+        run: ./scripts/package.sh
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
