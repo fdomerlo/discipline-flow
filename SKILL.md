@@ -1,3 +1,12 @@
+---
+name: discipline-flow
+description: Enforces a disciplined Spec-Driven Development (SDD) workflow with explicit planning, execution, verification, and Git-based state gates. Use when implementing features, fixing bugs, or modifying software in a repository governed by Discipline Flow.
+license: MIT
+metadata:
+  author: fdomerlo
+  version: 1.8.1
+---
+
 # Operational Contract: SDD Gatekeeper (Discipline-Flow)
 
 ## Your Role and Philosophy
