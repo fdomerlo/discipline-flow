@@ -1,101 +1,23 @@
 <!-- BEGIN DISCIPLINE-FLOW -->
 # {{PROJECT_NAME}} — Contributor & Executor Contract (Discipline Flow)
-<!-- Skill location: {{SKILL_PATH}} — scripts and assets are used in place, never copied. -->
+<!-- Skill location: {{SKILL_PATH}} — scripts, workflows, and assets run in place, never copied. -->
 
-## Always
+## Core Rules (Always Active)
+- **Language:** Code, comments, error messages, commit messages, and test identifiers in **English**. Chat, `plans/PLAN-*.md`, `SESSION.md` prose body, and audit reports in **Spanish**.
+- **Test baseline:** Run `{{TEST_COMMAND}}` before your first change in a session and after every logical unit. Never leave the suite red at a commit boundary.
+- **Commits:** Atomic Conventional Commits (`{{COMMIT_TYPES}}`). During `execute`, every code commit message MUST include the active phase token (e.g. `feat(F1): ...`).
+- **PROHIBITED:** Never hand-edit the YAML frontmatter (`--- ... ---`) of `SESSION.md` or manually tick `- [x]` in `PLAN-*.md` without verification. State transitions belong exclusively to `{{SKILL_PATH}}/scripts/sdd.sh` and `{{SKILL_PATH}}/workflows/*.py`.
+- **Dependencies:** No new dependencies without explicit human approval.
 
-- Code, comments, error messages, commit messages, and any file inside
-  this repo: **English**. Chat with the human, plans (`PLAN-*.md`),
-  session checkpoint (`SESSION.md` body), audit tables, and closure
-  reports: whatever language they're using (Spanish by default, per `SKILL.md`
-  language rule).
-- Run `{{TEST_COMMAND}}` before your first change in a session and after
-  every logical unit. Never leave the suite red at a commit boundary.
-- Atomic commits, one concern each, conventional-commit messages:
-  `{{COMMIT_TYPES}}`.
-- **PROHIBITED: Never hand-edit state files.** You are strictly forbidden
-  from manually editing the YAML frontmatter block (`--- ... ---`) of `SESSION.md`.
-  All SDD state changes (`plan`, `execute`, `verify`) and active phase updates
-   must be executed exclusively via `{{SKILL_PATH}}/scripts/sdd.sh`.
-- No new dependencies without explicit human approval.
+## Programmatic SDD Workflows (`run_workflow`)
+When the `run_workflow` tool is available, delegate SDD orchestration to the deterministic Python workflows (zero prose overhead):
+1. **Doubt-Driven Review:** `run_workflow(ScriptPath="{{SKILL_PATH}}/workflows/sdd_doubt.py", Description="Adversarial doubt cycle", Args={"claim": "...", "artifact": "...", "contract": "..."})`
+2. **Plan & Self-Audit:** `run_workflow(ScriptPath="{{SKILL_PATH}}/workflows/sdd_plan.py", Description="Draft and audit SDD plan", Args={"title": "...", "spec": "..."})`
+3. **Execute & Verify Phase (TDD Red -> Green -> Verify):** `run_workflow(ScriptPath="{{SKILL_PATH}}/workflows/sdd_execute.py", Description="Execute phase F<N>", Args={"phase": "F1"})`
+4. **Cycle Close (C2 Audit):** `run_workflow(ScriptPath="{{SKILL_PATH}}/workflows/sdd_close.py", Description="Close SDD cycle")`
 
-## Plan mode
-
-If a `PLAN-*.md` file exists in `plans/` or at the repo root
-(canonical location: `plans/`; root is legacy and still accepted), you are executing a planned
-cycle. This changes the rules:
-
-- Work on exactly ONE phase per session — the phase the human names. Never
-  start the next phase, even if it looks trivial from here.
-- **Phase activation**: Before modifying code for a phase, activate it via:
-  `{{SKILL_PATH}}/scripts/sdd.sh start F<N>` (e.g. `{{SKILL_PATH}}/scripts/sdd.sh start F1`).
-  This sets `sdd_state: execute` in `SESSION.md` and unblocks the git `pre-commit` hook.
-- **Phase-scoped commits**: Every commit message in this phase must reference the active phase
-  (e.g. `feat(F1): implement token rotation` or `test: add edge cases (F1)`). The `commit-msg`
-  hook strictly validates this convention.
-- The plan is the spec. If something in it is ambiguous or you believe it
-  is wrong: **STOP and ask.** Deviating silently from the plan is the
-  failure mode this whole contract exists to prevent — do not embody it.
-- Findings referenced in the plan (a bug, a bypass, a failing case) become
-  a failing test *before* the fix. Show the RED run, then fix, then GREEN.
-- **Criteria traceability (`CRIT-XX`)**: every automated criterion in the plan
-  bears a unique sequential identifier (`CRIT-01`, `CRIT-02`, ...). Each automated
-  criterion MUST map to at least one test whose function or block name contains that
-  exact identifier (e.g. `test("CRIT-01: ...")` or `def test_crit_01_...()`).
-- **Strict ticking rule (`- [x]`)**: you are strictly forbidden from ticking
-  (`- [x]`) an automated criterion on your own say-so. Before ticking any,
-  run the mandatory gate: `{{SKILL_PATH}}/scripts/sdd.sh verify F<N>` (or `{{SKILL_PATH}}/scripts/verify-crit.sh PLAN-N.md F<N>`).
-  Tick only what the script confirms — if it exits non-zero, STOP and fix the
-  underlying issue (missing test, failing test); never tick, bypass, or
-  explain the failure away. Leave anything only a human can verify unticked
-  (e.g. `CRIT-03: (manual) ...`) and explicitly state that it is pending
-  human verification.
-- At phase end, report:
-  1. Criteria demonstration mapping: the exact table `{{SKILL_PATH}}/scripts/verify-crit.sh`
-     printed, plus any manual criteria left unticked for human audit.
-  2. Files changed (in a clear summary table).
-  3. Tests added (and what attack, regression, or behavior each one guards against).
-  4. Any deviation from the plan with justification.
-  5. Open questions for the human.
-  Then stop — the human audits the diff before merge.
-
-### Session checkpoint (`SESSION.md`)
-
-If `SESSION.md` exists at the repo root, a previous session left the
-current phase in progress. Before doing anything else:
-
-1. Read it. Do not start from memory or from the plan alone.
-2. Check that its `Base commit` is an ancestor of the current `HEAD`:
-   `git merge-base --is-ancestor <base-commit> HEAD`. If it is not
-   (non-zero exit), the repository moved in a way the checkpoint cannot
-   account for (rebase, reset, force-push, an unrelated commit touching
-   the same files) — STOP and tell the human, do not guess which state
-   is current.
-3. Compare `git status` / `git diff` against "Current working state". If
-   they disagree, say so before proceeding — the checkpoint may be stale.
-4. If `Human review: pending` is still set, STOP and ask before
-   continuing — an unresolved review does not resolve itself with time.
-5. Resume from "Next action" instead of re-deriving it from the plan.
-
-At the end of every session — whether or not the phase closed — rewrite
-`SESSION.md` body from `{{SKILL_PATH}}/assets/SESSION.md.template`. Write it atomically:
-save the new content to `SESSION.md.tmp`, then `mv SESSION.md.tmp
-SESSION.md`. Never edit `SESSION.md` in place. `Base commit` is always
-`git rev-parse HEAD` at write time and `Updated` the current UTC
-timestamp — obtained by running the command, never typed from memory.
-
-`SESSION.md` is a convenience, not a guarantee: like the checkboxes in
-`PLAN-N.md`, it is written by the same agent doing the work, and it can
-be wrong. It survives a crash better than an unwritten thought — nothing
-more.
-
-## Definition of done for any phase
-
-- All acceptance criteria in the plan for this phase: met and demonstrated
-  with passing tests matching each automated `CRIT-XX` (or explicitly flagged as manual
-  and awaiting human review), not merely asserted.
-- Adversarial tests for every fix in the phase (and specification tests for new features): present and green.
-- The full existing test suite: green.
-- No scope creep — anything tempting-but-tangential goes in the plan's
-  "out of scope" section for a future cycle, not into this diff.
+## Direct CLI Protocol (Subagents & Non-Workflow Environments)
+- **Activate phase before coding:** `{{SKILL_PATH}}/scripts/sdd.sh start F<N> [agent]`
+- **Traceability (`CRIT-XX`):** Every automated criterion in `plans/PLAN-*.md` (`CRIT-01`, `CRIT-02`, ...) MUST map to a test whose name/tag includes that exact `CRIT-XX` identifier. Write failing tests first (RED), then minimal implementation (GREEN).
+- **Deterministic verification gate:** Run `{{SKILL_PATH}}/scripts/sdd.sh verify F<N>` (which invokes `{{SKILL_PATH}}/scripts/verify-crit.sh`). Stop and wait for human diff audit after each phase (`Human review: pending`).
 <!-- END DISCIPLINE-FLOW -->

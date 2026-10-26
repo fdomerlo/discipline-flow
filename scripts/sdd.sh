@@ -231,8 +231,8 @@ case "$COMMAND" in
         PREV_AGENT=$(get_val "active_agent")
         if [[ -n "$AGENT" && "$PREV_TASK" == "$PHASE_OR_TASK" && -n "$PREV_AGENT" && "$PREV_AGENT" != "none" && "$PREV_AGENT" != "$AGENT" ]]; then
             echo "⚠️  La fase '$PHASE_OR_TASK' está reclamada por el agente '$PREV_AGENT'." >&2
-            echo "   Si trabajás en paralelo, coordiná con tu contraparte o usá branch-per-phase." >&2
-            echo "   Ver references/multi-agent.md. Continuando con el reclamo de '$AGENT'." >&2
+            echo "   Si trabajás en paralelo, coordiná con tu contraparte o usá branch-per-phase (workflows/sdd_execute.py)." >&2
+            echo "   Continuando con el reclamo de '$AGENT'." >&2
         fi
 
         # Validar y congelar hash del plan
@@ -328,6 +328,10 @@ case "$COMMAND" in
         if [[ "$NEW_STATE" == "plan" ]]; then
             set_val "active_task" "none"
             set_val "active_agent" "none"
+            PLAN_FILE=$(resolve_plan_file)
+            if [[ -n "$PLAN_FILE" && -f "$PLAN_FILE" ]]; then
+                set_val "plan_hash" "$(calc_plan_hash "$PLAN_FILE")"
+            fi
             refresh_body "Plan review, awaiting approval" "Revisar y aprobar el plan; luego arrancar la primera fase ($(cli_path) start F1)" "base"
         else
             refresh_body "" ""

@@ -1,278 +1,95 @@
-# Discipline Flow
+# Discipline Flow (v2.0 — Programmatic Workflow Edition)
 
-Arnés de **Desarrollo Guiado por Especificaciones (SDD)** y control de ejecución determinista para agentes de código (Claude Code, Antigravity, Cursor, OpenCode).
+Arnés de **Desarrollo Guiado por Especificaciones (SDD)** y orquestación determinista para agentes de código (Antigravity, Claude Code, Cursor, OpenCode).
 
-Cero dependencias. Cero herramientas en segundo plano. Cero bases de datos de estado. Todo el control se ejerce mediante contratos de prosa estructurada, anclaje en Git, hooks deterministas y verificación automatizada en tests.
+En lugar de inflar la ventana de contexto con más de 100 KB de manuales en prosa que el LLM puede olvidar o racionalizar, **Discipline Flow v2.0** combina **workflows programáticos (`run_workflow` en Python con JSON Schemas estrictos)** y **barreras físicas a nivel de sistema operativo (Git hooks + Bash POSIX)**, reduciendo el consumo de contexto pasivo en un **94,4%** (~1.500 tokens totales).
 
 ---
 
 ## 1. El Problema que Resuelve
 
-Cuando un agente de IA programa sin restricciones formales, suele presentar tres fallas críticas:
-1. **Deriva de alcance (*Scope Creep*):** Empieza arreglando un bug y termina refactorizando módulos ajenos sin autorización.
-2. **Sesgo de complacencia:** Tilda tareas como completadas porque "asume" que el código funciona, sin haber probado los casos de borde.
-3. **Amnesia y saturación de contexto:** Tras pausar una sesión o alcanzar el límite de tokens, la siguiente sesión arranca a ciegas, adivinando el estado del repositorio o duplicando trabajo.
+Cuando un agente de IA programa guiado solo por instrucciones de texto (prosa), sufre tres fallas estructurales:
+1. **Degradación de atención (*Context Rot*):** Cuanto más largo es el manual de la skill, más probable es que el modelo ignore reglas al crecer la conversación.
+2. **Sesgo de confirmación (Juez y Parte):** Si el mismo contexto que redacta un plan o escribe un test también implementa el código y lo audita, tiende a escribir tests débiles o tildar casillas (`- [x]`) sin verificarlas.
+3. **Deriva de alcance (*Scope Creep*):** Empieza arreglando un bug y termina refactorizando módulos ajenos o commiteando sin trazabilidad.
 
-**Discipline Flow** impone una estructura de trabajo rigurosa donde:
-* **El plan es la especificación:** El trabajo se divide en fases atómicas con alcance cerrado.
-* **Bloqueo físico durante el diseño:** El hook `pre-commit` impide commitear código fuente mientras el plan no esté aprobado.
-* **Los criterios se demuestran con código (`CRIT-XX`):** Ninguna tarea se da por cumplida sin un test en verde que lleve su etiqueta.
-* **Trazabilidad por fases:** Los commits exigen referenciar la fase activa (`F1`, `F2`).
-* **La memoria entre sesiones es persistente (`SESSION.md`):** Se retoma el trabajo en segundos sin releer historiales muertos de chat.
-* **El humano audita el diff:** Cada fase termina con un freno obligatorio antes de tocar la rama principal.
-
----
-
-## 2. Modo de operación
-
-El sistema desacopla responsabilidades en tres capas complementarias:
-
-| Archivo | Capa | Rol | Mutabilidad |
-| :--- | :--- | :--- | :--- |
-| **`AGENTS.md`** | Constitución | Define cómo debe comportarse el agente, comandos permitidos, reglas de detención obligatoria y uso de `sdd.sh`. | Estático |
-| **`PLAN-N.md`** | Especificación | Define qué se construye, qué queda explícitamente fuera de alcance y los criterios de aceptación (`CRIT-XX`). | Estable por ciclo |
-| **`SESSION.md`** | Memoria y Estado | Guarda la máquina de estados SDD (`plan`, `execute`, `verify`), la fase activa (`active_task: F1`), el commit base y la siguiente acción. | Altamente dinámico |
+**Discipline Flow** reemplaza las "instrucciones blandas" por dos capas de ejecución determinista:
+* **Capa 1 — Orquestación Cognitiva (`workflows/sdd_*.py` vía `run_workflow`):** Scripts de Python que aíslan contextos entre agentes (Arquitecto vs. Auditores paralelos; Agente TDD RED vs. Agente TDD GREEN; Revisor Adversarial sin acceso al `CLAIM`), imponen contratos de salida con JSON Schema y ejecutan las transiciones de estado sin depender de la voluntad del LLM.
+* **Capa 2 — Muro de Contención Físico (`scripts/` + Git Hooks):**
+  * **`pre-commit`**: Bloquea archivos de secretos (`.env*`, `*.pem`, `*.key`, llaves privadas) en todo momento, y bloquea cualquier cambio a archivos de código fuente mientras `sdd_state` sea `plan`.
+  * **`commit-msg`**: Exige Conventional Commits y obliga a referenciar la fase activa (ej. `feat(F1): ...`) durante `execute`.
+  * **`verify-crit.sh`**: Verifica sintácticamente que cada criterio `CRIT-XX` tenga un test real en el repositorio, audita que no existan commits evasores (`--no-verify`) desde el inicio de la fase y corre la suite de pruebas completa.
 
 ---
 
-## 3. Principios Fundamentales
+## 2. Arquitectura de 4 Workflows Programáticos (`workflows/`)
 
-### A. Trazabilidad Contractual (`CRIT-XX`)
-Cada fase de un plan define entre 2 y 7 criterios de aceptación atómicos identificados secuencialmente:
-```markdown
-### Acceptance criteria
-- [ ] CRIT-01: El token de refresco expira en 7 días y revoca el anterior.
-- [ ] CRIT-02: Peticiones concurrentes con el mismo token devuelven HTTP 409.
-- [ ] CRIT-03: (manual) Verificar legibilidad del log en consola de auditoría.
-```
-
-**Regla de oro:** El agente tiene **estrictamente prohibido** marcar `- [x]` en un criterio automatizado si no existe una prueba unitaria, de integración o e2e cuyo nombre incluya el identificador exacto (`test('CRIT-01: ...')`) y haya pasado exitosamente en la sesión actual mediante `./scripts/sdd.sh verify F<N>`.
-
-### B. Barreras Deterministas en Git (Hooks por Defecto)
-1. **`pre-commit`**: Si `sdd_state` es `plan`, bloquea commits que contengan archivos de código fuente. Obliga a que la especificación esté cerrada antes de tocar código.
-2. **`commit-msg`**: Exige Conventional Commits y verifica que, en estado `execute`, el commit mencione explícitamente la fase activa (ej. `feat(F1): ...` o `test: check crit-01 (F1)`).
-Ambos hooks se instalan automáticamente en el bootstrap del repositorio.
-
-### C. Fachada Unificada y Cero Fricción (`sdd.sh`)
-Para evitar recordar múltiples scripts o lidiar con micro-tareas, el arnés opera a nivel de **Fase** (`F1`, `F2`, etc.) a través de un único CLI:
-* `./scripts/sdd.sh plan "Título"` → Inicia plan y bloquea commits de código.
-* `./scripts/sdd.sh start F1` → Desbloquea código para la fase F1.
-* `./scripts/sdd.sh verify F1` → Corre suite de pruebas y verifica criterios `CRIT-XX`.
-* `./scripts/sdd.sh advance <estado>` → Transiciona el estado SDD (`plan`, `execute`, `verify`).
-* `./scripts/sdd.sh status` → Consulta el estado SDD actual y la integridad del hash de especificación.
-
-> **Sin fricción:** El desarrollador puede pedirle al agente en el chat *"Arrancá la fase F1"* o usar comandos naturales. El agente tiene la instrucción constitucional de invocar silenciosamente `./scripts/sdd.sh start F1` por detrás para sincronizar el gatekeeper físico.
+| Workflow (`ScriptPath`) | Qué reemplaza | Garantías deterministas en Python (0 tokens de prosa) |
+| :--- | :--- | :--- |
+| **[`workflows/sdd_doubt.py`](file:///home/fdomerlo/Proyectos/fdomerlo/discipline-flow/workflows/sdd_doubt.py)** | *Doubt-Driven Development* | Pasa al revisor adversarial **únicamente** `ARTIFACT + CONTRACT` (nunca el `CLAIM`). Fuerza clasificación por precedencia (`contract_misread`, `actionable`, `trade_off`, `noise`), limita a máx. 3 ciclos y aborta si detecta **Doubt Theater** (2 ciclos con hallazgos sustantivos y 0 accionables). |
+| **[`workflows/sdd_plan.py`](file:///home/fdomerlo/Proyectos/fdomerlo/discipline-flow/workflows/sdd_plan.py)** | *Plan Cycle + Task Breakdown + SDD* | Impide sobreescribir un plan con `- [ ] CRIT-XX` abiertos. Valida que el *Capability Map* (`decompose=True`) sea un **DAG sin ciclos**. Exige por JSON Schema 2–7 criterios y ≤ 5 archivos por fase. Lanza **4 auditores independientes en `parallel()`**, renderiza `plans/PLAN-N.md` y congela `plan_hash` vía `sdd.sh`. |
+| **[`workflows/sdd_execute.py`](file:///home/fdomerlo/Proyectos/fdomerlo/discipline-flow/workflows/sdd_execute.py)** | *TDD + Multi-Agent + Security + DoD + Phase Close (C1)* | Verifica ausencia de conflictos y ancestro Git en `SESSION.md`. Recorta **solo la fase `F<N>`** del plan. Separa **Agente RED** (solo tests con `CRIT-XX`, comprobado con `git grep`) de **Agente GREEN** (implementación). Dispara auditor de Seguridad/DoD **solo si** el diff toca superficies sensibles. Corre `sdd.sh verify F<N>` y **Python** tilda los `- [x]` en `PLAN-N.md`. |
+| **[`workflows/sdd_close.py`](file:///home/fdomerlo/Proyectos/fdomerlo/discipline-flow/workflows/sdd_close.py)** | *Cycle Close (C2)* | Parsea por regex criterios `- [ ]` vs `- [x]` y `Out of scope`, y ejecuta en `parallel()` la auditoría de *Realidad vs. Plan* y *Scope Leaks* sobre el historial Git del ciclo. |
 
 ---
 
-## 4. Integración y Descubrimiento (Project-Local y Agnóstica de Modelo)
-
-Discipline Flow es una skill **local al proyecto** (*project-local*) y **completamente agnóstica del modelo**:
-
-### A. Naturaleza Project-Local
-* **Antigravity / Gemini:** `.agents/skills/discipline-flow/` o `.gemini/config/skills/discipline-flow/`
-* **Claude Code:** `.claude/skills/discipline-flow/`
-* **Agnóstico / Submódulo Git:** `skills/discipline-flow/`
-* **Zero Runtime Overhead:** Opera mediante scripts Bash livianos estándar y archivos Markdown.
-
-### B. Descubrimiento Semántico y Constitucional
-* **Semántico (`SKILL.md`):** Indexado por agentes compatibles para activar la skill ante solicitudes de planificación o desarrollo disciplinado.
-* **Constitucional (`AGENTS.md`):** Anclaje directo en el repositorio, leído nativamente por los agentes actuales.
-
-### C. Flujo de Trabajo en Tiempo de Ejecución
-
-```text
-                  ┌──────────────────────┐
-                  │ Inicio de la sesión  │
-                  └──────────┬───────────┘
-                             │
-                  ¿Existe SESSION.md?
-                  ┌──────────┴───────────┐
-               SÍ │                      │ NO
-                  ▼                      ▼
-     git merge-base OK?          Lee SKILL.md y rutea:
-     ┌────────────┴──────────┐   ├── A: Bootstrap (init.sh)
-  SÍ │                    NO │   ├── B: Plan Cycle (sdd.sh plan)
-     ▼                       ▼   └── C: Phase Close (sdd.sh verify)
-Reanuda desde          ALTO OBLIGATORIO
-"Next action"       (divergencia detectada)
-     │                       ▲
-     ▼                       │
-Ejecuta fase:                │
-  1. sdd.sh start F1         │
-  2. Test CRIT-XX (RED)      │
-  3. Código (GREEN)          │
-  4. Commit feat(F1): ...    │
-  5. sdd.sh verify F1 ───────┘
-  6. ALTO: Reporte para auditoría humana de diff
-```
-
----
-
-## 5. Coexistencia con `AGENTS.md`
-
-Para garantizar compatibilidad total sin alterar las reglas preexistentes del usuario, Discipline Flow utiliza **bloques administrados delimitados** (*Managed Delimited Blocks*):
-
-```markdown
-<!-- BEGIN DISCIPLINE-FLOW -->
-# MiProyecto — Contributor & Executor Contract (Discipline Flow)
-
-## Always
-...
-## Plan mode
-...
-<!-- END DISCIPLINE-FLOW -->
-```
-
-* **Si `AGENTS.md` no existe:** Se crea conteniendo el bloque delimitado.
-* **Si ya existe:** Se realiza un **append no destructivo**.
-* **Idempotente:** Reejecutar `init.sh` actualiza **únicamente** la sección entre los marcadores.
-* **Fuente única:** `assets/AGENTS.md.template` es canónico; el `AGENTS.md` de cada repo (incluido este, vía `init.sh --self`) se regenera desde él, nunca se edita a mano fuera de los marcadores.
-* **Sobrescritura total:** Solo disponible mediante el flag explícito `--force`.
-
----
-
-## 6. Estructura del Repositorio de la Skill
+## 3. Estructura del Repositorio
 
 ```text
 discipline-flow/
-├── SKILL.md                      # Contrato operativo del agente (SDD Gatekeeper en inglés con salida en español)
+├── SKILL.md                      # Contrato compacto para el agente (~45 líneas)
 ├── README.md                     # Este documento
 ├── PROJECT_FOUNDATION.md         # Principios fundacionales y arquitectura del arnés SDD
 ├── assets/
-│   ├── AGENTS.md.template        # Plantilla del contrato operativo con delimitadores
+│   ├── AGENTS.md.template        # Plantilla ultracompacta del contrato (< 30 líneas)
 │   ├── PLAN.md.template          # Plantilla de especificación SDD con CRIT-XX
 │   └── SESSION.md.template       # Plantilla del checkpoint de sesión con frontmatter SDD
-├── references/
-│   ├── bootstrap.md              # Guía de inicialización de repositorios y coexistence
-│   ├── definition-of-done.md     # Estándar de calidad y criterios de completitud
-│   ├── doubt-driven-development.md # Metodología de clarificación previa (Fase Cero)
-│   ├── multi-agent.md            # Protocolo de trabajo en paralelo (un agente por fase)
-│   ├── phase-close.md            # Protocolo de cierre de fase y auditoría de diff
-│   ├── plan-cycle.md             # Guía del ciclo de planificación y ejecución por fases
-│   ├── security-checklist.md     # Lista de control de seguridad para agentes de código
-│   ├── spec-driven-development.md # Principios de desarrollo guiado por especificaciones (SDD)
-│   ├── task-breakdown.md         # Heurísticas de desglose atómico de tareas
-│   ├── test-driven-development.md # Ciclo TDD estricto (RED -> GREEN -> REFACTOR)
-│   └── testing-patterns.md       # Patrones de testing y trazabilidad CRIT-XX
-└── scripts/
-    ├── init.sh                   # Script de instalación inicial (scripts + hooks por defecto)
-    ├── package.sh                # Generador del distribuible zip versionado (release)
-    ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, advance, status)
-    ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX y test runner
-    ├── new-plan.sh               # Generador de nuevos planes numerados (canónico: plans/, root legacy)
-    ├── lib/
-    │   └── sdd-common.sh         # Helpers compartidos SESSION/PLAN (cero dependencias, POSIX sh)
-    ├── pre-commit-hook.sh        # Hook Git: Bloquea commits de código en modo plan (.git/hooks/pre-commit)
-    └── commit-msg-hook.sh        # Hook Git: Valida Conventional Commits y fase activa (.git/hooks/commit-msg)
+├── workflows/
+│   ├── sdd_doubt.py              # Revisión adversarial con aislamiento de contexto y Doubt Theater check
+│   ├── sdd_plan.py               # Diseño de plan por JSON Schema, DAG check y 4 auditores en paralelo
+│   ├── sdd_execute.py            # Ciclo TDD Red/Green aislado, auditoría condicional y cierre C1
+│   └── sdd_close.py              # Auditoría paralela de cierre de ciclo (C2)
+├── scripts/
+│   ├── init.sh                   # Bootstrap del proyecto (AGENTS.md + hooks in-place)
+│   ├── reset.sh                  # Limpieza segura del arnés preservando reglas/hooks ajenos
+│   ├── package.sh                # Generador del distribuible zip versionado (release)
+│   ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, advance, status)
+│   ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX, bypass audit y test runner
+│   ├── new-plan.sh               # Generador de nuevos planes numerados (plans/PLAN-N.md)
+│   ├── lib/
+│   │   └── sdd-common.sh         # Helpers compartidos SESSION/PLAN (POSIX sh)
+│   ├── pre-commit-hook.sh        # Hook Git: Bloquea secretos siempre y código en modo plan
+│   └── commit-msg-hook.sh        # Hook Git: Valida Conventional Commits y token de fase activa
 └── tests/
-    └── run.sh                    # Suite propia (bash puro): lib, estado sdd.sh y búsqueda CRIT-XX
+    ├── run.sh                    # Runner de pruebas herméticas
+    └── test-*.sh                 # 10 suites de pruebas (incluyendo test-workflows.sh end-to-end)
 ```
 
 ---
 
-## 7. El Ciclo de Trabajo en 4 Pasos
+## 4. El Ciclo de Trabajo
 
-### Paso 1: Bootstrap (Inicialización)
-
-Activa la disciplina en un proyecto nuevo o existente. Instala scripts y hooks de Git por defecto:
-
+### Paso 1: Bootstrap
 ```bash
-./scripts/init.sh -t "npm test"
+<skill-path>/scripts/init.sh -t "npm test"
 ```
+Instala el bloque administrado en `AGENTS.md` y los hooks `.git/hooks/{pre-commit, commit-msg}` referenciando la skill en su lugar (sin copiar scripts al proyecto).
 
-Esto genera `AGENTS.md` (apuntando a la skill in-place), e instala los hooks `.git/hooks/{pre-commit, commit-msg}` con esa ruta incorporada. Los scripts y assets **no se copian**: se usan desde el directorio de la skill. *(Opcionalmente `--no-hooks` si se desean omitir; `--self` para dogfooding en el propio repo de la skill).*
+### Paso 2: Planificación (`sdd_plan.py` / `sdd.sh plan`)
+* **Con `run_workflow`:** El agente ejecuta `workflows/sdd_plan.py`, que diseña el plan con JSON Schema, lo audita en 4 ejes paralelos, escribe `plans/PLAN-N.md` y bloquea el estado en `plan`.
+* **Por CLI directo:** `./scripts/sdd.sh plan "Título"`.
 
-### Paso 2: Planificación (Spec First)
+### Paso 3: Ejecución y Verificación de Fase (`sdd_execute.py` / `sdd.sh start & verify`)
+* **Con `run_workflow`:** Al indicar *"Inicia F1"*, el agente invoca `workflows/sdd_execute.py` con `Args={"phase": "F1"}` (o `{"phases": ["F1", "F2"]}` para ejecución multi-agente en paralelo con `workspace="share"`). El script ejecuta `sdd.sh start F1`, coordina los sub-agentes **RED** y **GREEN**, corre `sdd.sh verify F1`, tilda los `- [x]` verificados en `PLAN-N.md` y se detiene para la auditoría humana del diff.
+* **Por CLI directo:** `./scripts/sdd.sh start F1` → tests `CRIT-XX` (RED) → código (GREEN) → `./scripts/sdd.sh verify F1`.
 
-Antes de escribir código, genera la especificación formal del ciclo:
-
-```bash
-./scripts/sdd.sh plan "Autenticación JWT y Rotación de Tokens"
-```
-
-El proyecto entra en `sdd_state: plan`. En este estado, el hook `pre-commit` impide commitear código. El agente y el desarrollador definen el objetivo, las fases (`F1`, `F2`) y los criterios `CRIT-01`, `CRIT-02`. **El agente se detiene aquí:** el plan debe ser aprobado por el humano.
-
-### Paso 3: Ejecución de Fase (Código Desbloqueado)
-
-Para comenzar a programar la primera fase:
-
-```bash
-./scripts/sdd.sh start F1
-```
-
-*(O en el chat con el agente: "Arrancá la fase F1", y el agente corre este comando).*
-1. El estado pasa a `execute` y la fase activa se fija en `F1` (código desbloqueado).
-2. Se escribe el test automatizado que referencia explícitamente a `CRIT-XX`.
-3. Se escribe el código mínimo de producción para ponerlo en verde (RED → GREEN).
-4. Cada commit incluye la fase: `git commit -m "feat(F1): implementar rotación de tokens"`.
-5. Se actualiza atómicamente `SESSION.md`.
-
-### Paso 4: Cierre de Fase y Auditoría Humana
-
-Al completar los criterios de la fase:
-
-```bash
-./scripts/sdd.sh verify F1
-```
-
-1. El gate verifica la correspondencia 1:1 entre cada `CRIT-XX` y los tests en el código (`--untracked` incluido).
-2. Corre la suite completa de pruebas del proyecto.
-3. Si pasa todo en verde, el estado avanza a `verify`.
-4. El agente genera el reporte de cierre con la tabla de evidencia.
-5. **Se detiene obligatoriamente.** No avanza a la siguiente fase hasta que el humano audite y apruebe el diff en Git.
+### Paso 4: Cierre de Ciclo (`sdd_close.py`)
+Al finalizar todas las fases del plan, `workflows/sdd_close.py` audita en paralelo el diff acumulado del ciclo contra el plan original y la sección `Out of scope`.
 
 ---
 
-## 8. Alcance Honesto y Garantías
+## 5. Distribución e Instalación
 
-* **Es un arnés basado en contratos y gates deterministas:** Funciona instruyendo al agente con reglas operativas inequívocas y protegiendo el repositorio con hooks estándar de Git.
-* **Sin bloqueos de software pesados:** No introduce demonios en segundo plano, locks distribuidos ni parsers de AST. La rigidez la aportan Git, Bash y los tests del propio proyecto.
-* **Resiliencia ante fallos:** No promete transaccionalidad matemática ACID, pero reduce drásticamente el retrabajo y la pérdida de rumbo habitual en agentes autónomos.
-* **Bypass auditable, no invisible:** `--no-verify` sigue disponible para emergencias, pero `verify` falla hasta que los commits de código evasores lleven el token de fase o el humano los despeje.
-* **Multi-agente por coordinación:** un agente por fase con reclamo (`start F1 <agente>`) y branch-per-phase — ver `references/multi-agent.md`. Sin lock duros por diseño.
-
----
-
-## 9. Distribución e Instalación en Proyectos
-
-Cada release (tag `X.Y.Z`) publica automáticamente `discipline-flow-<versión>.zip` + `sha256sums.txt` en su GitHub Release (workflow `release-dist`: verifica suite, empaqueta vía `scripts/package.sh`, adjunta). No copiar nunca el repo con su `.git` (2.8M de historial de desarrollo que ningún agente necesita).
-
-### Qué contiene el zip (y qué no)
-
-| Incluye | Excluye |
-| :--- | :--- |
-| `SKILL.md`, `scripts/`, `assets/`, `references/`, `VERSION` | `.git/`, `tests/`, `README.md`, `PROJECT_FOUNDATION.md` (desarrollo de la skill, no runtime) |
-
-La estructura interna se conserva intacta (`SKILL.md` referencia `references/` y `scripts/` por rutas relativas).
-
-Instalada la skill, el proyecto la referencia en su ubicación: `init.sh` escribe esa ruta en `AGENTS.md` y la incorpora a los hooks. Solo `AGENTS.md`, `plans/` y `SESSION.md` viven en el proyecto; `scripts/` y `assets/` nunca se copian.
-
-### Métodos de instalación
-
-**A. Submódulo git (recomendado):** versiona la skill por commit y actualizar es un `pull`.
-```bash
-git submodule add https://github.com/fdomerlo/discipline-flow.git .agents/skills/discipline-flow
-git -C .agents/skills/discipline-flow checkout 1.6.0
-```
-
-**B. Zip de release:** para proyectos sin submódulos.
-```bash
-unzip discipline-flow-1.6.0.zip -d .agents/skills/
-```
-
-Luego, bootstrap desde la ruta instalada (no hace falta entrar al directorio):
-```bash
-.agents/skills/discipline-flow/scripts/init.sh -t "<comando de tests>" -d /ruta/al/proyecto
-```
-
-La versión instalada se comprueba en el archivo `VERSION` (tag + commit exacto) incluido en el zip, o con `git describe` dentro del submódulo.
-
-### Empezar de cero
-
-Si el proyecto se desvió y querés eliminar toda inicialización (planes, estado, bloque de contrato, hooks):
-```bash
-<skill-path>/scripts/reset.sh -d /ruta/al/proyecto   # interactivo, con inventario previo
-<skill-path>/scripts/reset.sh -d /ruta/al/proyecto --dry-run   # solo lista, no toca nada
-```
-Preserva con aviso lo ajeno (hooks propios, reglas fuera del bloque, scripts modificados). Después, `init.sh` arranca limpio.
+Cada release empaqueta vía `scripts/package.sh` únicamente los artefactos de runtime:
+* **Incluye:** `SKILL.md`, `workflows/`, `scripts/`, `assets/`, `VERSION`.
+* **Excluye:** `.git/`, `tests/`, `README.md`, `PROJECT_FOUNDATION.md`.

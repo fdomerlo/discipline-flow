@@ -1,40 +1,32 @@
 ## Project Foundation: Discipline-Flow
 
 **Propósito Principal:**
-`discipline-flow` es un arnés de contención determinista diseñado para forzar la adopción estricta de Specification-Driven Development (SDD) en entornos de trabajo asistidos por IA. Su objetivo es eliminar el "desvío de especificación" (specification drift) y el sesgo a la acción de los Modelos de Lenguaje Grande (LLMs) sustituyendo las instrucciones textuales blandas por barreras físicas inquebrantables a nivel de sistema operativo y control de versiones.
+`discipline-flow` es un arnés de contención y orquestación determinista diseñado para forzar la adopción estricta de Specification-Driven Development (SDD) en entornos asistidos por IA. Su objetivo es eliminar el desvío de especificación (*specification drift*), el sesgo de confirmación y el consumo excesivo de tokens sustituyendo los manuales en prosa por **workflows programáticos (`run_workflow`)** y **barreras físicas a nivel de sistema operativo y Git**.
 
 ### 1. Filosofía de Diseño (Core Tenets)
 
-* **Restricciones Duras sobre Prompts Blandos:** Los LLMs ignoran las instrucciones sistémicas cuando la ventana de contexto crece. Este sistema asume que el modelo intentará romper las reglas y delega la aplicación del flujo SDD a Git Hooks y scripts POSIX.
-* **Cero Dependencias (Zero-Dependency):** Construido íntegramente en Bash puro y utilidades coreutils (`sed`, `awk`, `grep`). No requiere demonios en segundo plano, entornos de Python, ni servidores MCP que consuman tokens innecesariamente.
-* **Estado Inmutable:** El estado del proyecto no reside en la memoria volátil del LLM, sino en un bloque YAML físico y estructurado que actúa como fuente de verdad.
+* **Código sobre Prosa (Zero-Prose Overhead):** Los LLMs degradan su cumplimiento de reglas cuando se cargan decenas de kilobytes de instrucciones textuales en su contexto. Toda regla procedimental (bucles TDD, aislamiento de contexto en revisiones, conteo de criterios, tildado de casillas `[x]`, transiciones de estado) debe ejecutarse programáticamente en `workflows/*.py` o `scripts/*.sh`, no pedirse por favor en prosa.
+* **Separación Física de Contextos:** El agente que propone una hipótesis (`CLAIM`) no puede ser el mismo que la audita; el agente que escribe el test de especificación (**RED**) no es el mismo que escribe el código de producción (**GREEN**). `workflows/sdd_doubt.py`, `workflows/sdd_plan.py` y `workflows/sdd_execute.py` fuerzan esta separación mediante instancias efímeras de `agent()` con esquemas JSON (`schema`) obligatorios.
+* **Núcleo CLI Cero-Dependencias:** La capa baja de control (`scripts/sdd.sh`, `scripts/verify-crit.sh`, `scripts/pre-commit-hook.sh`, `scripts/commit-msg-hook.sh`) está construida íntegramente en Bash y utilidades POSIX (`awk`, `sed`, `grep`, `sha256sum`), garantizando que los Git hooks funcionen en cualquier entorno Linux sin demonios ni servidores externos.
+* **Estado Inmutable:** El estado del proyecto reside en el bloque YAML frontmatter de `SESSION.md`, protegido por hashes SHA-256 del plan activo (`plan_hash`).
 
 ### 2. Arquitectura de Componentes
 
-El sistema se compone de un controlador central, una fuente de verdad y un muro de contención físico:
+1. **Orquestadores Programáticos (`workflows/`):**
+   * `sdd_doubt.py`: Ciclo adversarial acotado (máx. 3 iteraciones) con aislamiento físico del `CLAIM` y detección matemática de *Doubt Theater*.
+   * `sdd_plan.py`: Generación de `plans/PLAN-N.md` guiada por JSON Schema (2–7 `CRIT-XX`, ≤ 5 archivos por fase), validación de DAG sin ciclos para mapas de capacidades y auto-auditoría paralela en 4 ejes.
+   * `sdd_execute.py`: Verificación de integridad de `SESSION.md`, inyección quirúrgica del recorte de la fase `F<N>`, separación **TDD RED → TDD GREEN**, auditoría condicional de Seguridad/DoD sobre el `git diff`, ejecución de `verify-crit.sh` y tildado automático de `- [x]` en el plan.
+   * `sdd_close.py`: Auditoría C2 paralela de cierre de ciclo (*Unticked boxes*, *Reality vs. Plan* y *Scope Leaks*).
+2. **Controlador y Fuente de Verdad (`scripts/sdd.sh` + `SESSION.md`):**
+   Único ciudadano autorizado para mutar el frontmatter YAML (`plan`, `execute`, `verify`, `active_task`, `active_agent`, `plan_hash`).
+3. **Muro de Contención (`scripts/pre-commit-hook.sh` & `scripts/commit-msg-hook.sh`):**
+   * `pre-commit`: Bloquea archivos de credenciales/llaves privadas (`.env*`, `*.pem`, `*.key`, `PRIVATE KEY`) en todo momento y bloquea modificaciones de código fuente cuando `sdd_state: plan`.
+   * `commit-msg`: Exige Conventional Commits y el token de la fase activa (`F<N>`) en cada commit durante `execute`.
+4. **Validador Objetivo (`scripts/verify-crit.sh`):**
+   Verifica trazabilidad 1:1 de etiquetas `CRIT-XX` en tests reales, audita la historia Git contra commits evasores (`--no-verify`) y ejecuta el test runner del proyecto.
 
-* **Fuente de Verdad (`assets/SESSION.md.template`):**
-Contiene un bloque Frontmatter YAML estricto al inicio del archivo que define la fase actual (`sdd_state`), la tarea en curso (`active_task`) y el hash de la especificación (`plan_hash`). Es la única base de datos del flujo.
-* **El Controlador (`scripts/sdd.sh`):**
-El motor de transición de estado. Es el *único* ciudadano autorizado para mutar el bloque YAML en `SESSION.md` mediante comandos como `advance` o `start`.
-* **El Muro de Contención (`scripts/pre-commit-hook.sh` & `scripts/commit-msg-hook.sh`):**
-Interceptan las transacciones de código base. El `pre-commit` lee el estado YAML; si el estado es `plan`, rechaza cualquier modificación a archivos de código fuente (exit code 1). El `commit-msg-hook.sh` exige trazabilidad vinculando los commits a la `active_task` durante la fase `execute`.
-* **Validador Objetivo (`scripts/verify-crit.sh`):**
-Evalúa sintácticamente el cumplimiento de la especificación sin depender de la interpretación subjetiva del agente IA.
+### 3. Directivas para Futuras Mejoras
 
-### 3. Modelo de Interacción para Agentes IA
-
-Cualquier agente que opere en este repositorio (Gemini, Antigravity, OpenCode, Claude Code) debe adherirse a este contrato de interacción:
-
-1. **Mutación Prohibida:** El agente tiene estrictamente prohibido editar manualmente el bloque YAML de `SESSION.md`.
-2. **Interacción vía CLI:** Todo cambio de fase o inicio de tarea debe canalizarse ejecutando `./scripts/sdd.sh` en la terminal (ej. mapeado a través de Slash Commands como `/plan` o `/execute <tarea>`).
-3. **Conciencia de Barrera:** Si la terminal devuelve un error (exit code 1) tras un intento de commit, el agente debe detener la generación de código inmediatamente, leer el volcado de error de Git, e invocar el comando CLI correcto para alinear el estado del sistema con su intención de desarrollo.
-
-### 4. Directivas para Futuras Mejoras (Agent Guidelines)
-
-Si un agente es invocado para expandir, refactorizar o agregar características a `discipline-flow`, debe cumplir obligatoriamente las siguientes restricciones:
-
-* **No introducir dependencias externas:** Queda prohibido el uso de `jq`, `yq`, Python, Node.js o servidores MCP. Toda lógica de parseo debe resolverse con `awk`, `sed` y `grep` nativos.
-* **Fuente única en templates:** `assets/AGENTS.md.template` (y demás `assets/*.template`) son canónicos. El `AGENTS.md` de cualquier repo —incluido este, regenerado vía `init.sh --self`— deriva de ellos y nunca se edita a mano fuera de los bloques administrados. Dos copias de un contrato son dos contratos.
-* **Mantener la Portabilidad:** Los scripts deben ejecutar sin modificaciones en shells bash/zsh bajo entornos Linux (Fedora, Debian, contenedores LXC).
-* **Priorizar el Bloqueo:** Cualquier nueva funcionalidad de validación (ej. chequeo de cobertura de tests) debe implementarse como un bloqueo duro (hard fail) que aborte el proceso si no se cumplen los criterios, nunca como una advertencia (warning) pasiva.
+* **Fuente única en templates:** `assets/AGENTS.md.template`, `assets/PLAN.md.template` y `assets/SESSION.md.template` son canónicos.
+* **Workflows autocontenidos:** Según las reglas de `run_workflow`, los scripts en `workflows/*.py` no pueden importar módulos locales entre sí; deben usar únicamente la librería estándar de Python 3.8+ y las primitivas inyectadas (`agent`, `parallel`, `pipeline`, `phase`, `log`, `trajectory`).
+* **Priorizar el Bloqueo Duro:** Toda nueva regla verificable debe implementarse como una validación en código (`raise RuntimeError` en `workflows/*.py` o `exit 1` en `scripts/*.sh`), nunca como un consejo en prosa.

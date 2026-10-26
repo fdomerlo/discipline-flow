@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # discipline-flow/scripts/pre-commit-hook.sh
 # Installed as .git/hooks/pre-commit.
-# Bloquea cambios de código fuente mientras el proyecto esté en fase de diseño/planificación (sdd_state: plan).
+# 1. Bloquea secretos explícitos (.env, *.pem, *.key, claves privadas PEM/OpenSSH).
+# 2. Bloquea cambios de código fuente mientras el proyecto esté en fase de diseño/planificación (sdd_state: plan).
 
 SESSION_FILE="SESSION.md"
 
@@ -15,6 +16,20 @@ if [ -f "$_SKILL_LIB" ]; then
     # shellcheck source=lib/sdd-common.sh
     . "$_SKILL_LIB"
 fi
+
+# Barrera 1 (Seguridad determinista): Prohibido commitear archivos de credenciales o llaves privadas
+FORBIDDEN_FILES=$(git diff --cached --name-only | grep -E '(^|/)(\.env(\.local|\.production|\.development)?|.*\.(pem|key))$' || true)
+if [[ -n "$FORBIDDEN_FILES" ]]; then
+    echo "❌ Bloqueo de Seguridad Discipline Flow: Intento de commitear archivos de secretos/llaves."
+    echo "$FORBIDDEN_FILES" | sed 's/^/  - /'
+    exit 1
+fi
+
+if git diff --cached | grep -qE '^\+.*-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'; then
+    echo "❌ Bloqueo de Seguridad Discipline Flow: Llave privada detectada en el diff staged."
+    exit 1
+fi
+
 if [[ ! -f "$SESSION_FILE" ]]; then
     exit 0
 fi
@@ -24,7 +39,7 @@ else
     STATE=$(awk '/^---$/ { if (c++ == 1) exit } c==1 && /^sdd_state:/ { sub(/^sdd_state:[[:space:]]*/, ""); gsub(/\r/, ""); print $1 }' "$SESSION_FILE")
 fi
 
-# Barrera: Prohibido tocar código en fase de planificación
+# Barrera 2 (SDD): Prohibido tocar código en fase de planificación
 if [[ "$STATE" == "plan" ]]; then
     # Detecta cambios staged en archivos que no sean Markdown o texto de documentación
     STAGED_CODE=$(git diff --cached --name-only | grep -vE '\.(md|txt|markdown)$' || true)

@@ -2,8 +2,8 @@
 # scripts/package.sh — Build the versioned skill distributable (zip only).
 # Single source of truth for packaging, used locally and by CI.
 # Content comes from `git archive HEAD` (+ .gitattributes export-ignore),
-# so only tracked distributable files travel: SKILL.md, scripts/, assets/,
-# references/. A VERSION file (tag + commit) is injected into the archive.
+# so only tracked distributable files travel: SKILL.md, workflows/, scripts/,
+# assets/. A VERSION file (tag + commit) is injected into the archive.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

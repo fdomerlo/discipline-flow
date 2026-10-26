@@ -1,53 +1,46 @@
 ---
 name: discipline-flow
-description: Enforces a disciplined Spec-Driven Development (SDD) workflow with explicit planning, execution, verification, and Git-based state gates. Use when implementing features, fixing bugs, or modifying software in a repository governed by Discipline Flow.
+description: Enforces a deterministic Spec-Driven Development (SDD) workflow via programmatic Python workflows (`run_workflow`), JSON Schema contracts, and OS-level Git hooks. Use when implementing features, fixing bugs, or modifying software in a repository governed by Discipline Flow.
 license: MIT
 metadata:
   author: fdomerlo
-  version: 1.8.1
+  version: 2.0.0
 ---
 
-# Operational Contract: SDD Gatekeeper (Discipline-Flow)
+# Operational Contract: Programmatic SDD Gatekeeper (Discipline-Flow)
 
-## Your Role and Philosophy
-You are a Principal Software Engineer operating strictly under the paradigms described in `references/spec-driven-development.md` and `references/test-driven-development.md`. Your goal is to guide the user conversationally through the software lifecycle, maintaining zero friction in the chat, while enforcing absolute rigor in code.
+## Unbreakable Language & Code Rule
+- **Human-facing outputs (`PLAN-*.md`, `SESSION.md` body, chat, audit tables, closure reports):** **SPANISH**.
+- **Code, comments, error messages, commit messages, and test identifiers:** **ENGLISH**.
 
-Use the documents `definition-of-done.md`, `testing-patterns.md`, `doubt-driven-development.md`, and `task-breakdown.md` located in the `references/` directory as complementary knowledge bases. Apply them implicitly in all your responses.
+## Deterministic Architecture (Zero-Prose Overhead)
+Instead of loading ~100 KB of prose manuals into the context window, Discipline-Flow enforces Spec-Driven Development, Doubt-Driven Development, TDD (Red-Green-Refactor), Multi-Agent isolation, Security checks, and Phase/Cycle closure **programmatically** through two layers:
+1. **OS/Git Layer (`<skill-path>/scripts/`):** `sdd.sh`, `verify-crit.sh`, `pre-commit-hook.sh`, and `commit-msg-hook.sh` guard `SESSION.md` YAML state and block unauthorized commits. **Never hand-edit `SESSION.md` YAML frontmatter.**
+2. **Orchestration Layer (`<skill-path>/workflows/` via `run_workflow`):** Self-contained Python workflows enforce JSON Schemas, context isolation, `CRIT-XX` traceability, and automated checkbox ticking.
 
-## Unbreakable Language Rule (CRITICAL)
-**You MUST communicate with the user and author all human-facing auditable outputs in SPANISH.**
-Even though this operational contract is written in English for deterministic instruction following, every conversational response, user interaction, plan (`PLAN-*.md`), session checkpoint (`SESSION.md` body), audit evidence table, and closure report MUST be written in Spanish.
-Exception (project convention, aligned with `AGENTS.md` contract): code, code comments, error messages, commit messages, and test identifiers/symbols remain in English.
+## Lifecycle & Execution
 
-## Infrastructure Rule (CRITICAL)
-The repository is protected by OS-level Git hooks (`pre-commit`, `commit-msg`). Project state is immutable and resides in a YAML frontmatter block inside `assets/SESSION.md.template` (or runtime `SESSION.md`).
-Skill scripts and assets are used in place from the skill directory — they are never copied into the project, and plans/`SESSION.md` live in the project, never in the skill. The concrete CLI path is recorded in `AGENTS.md` (e.g. `.agents/skills/discipline-flow/scripts/sdd.sh`); every `./scripts/...` below is shorthand for it.
-**YOU are responsible for executing terminal commands silently to synchronize our chat with the physical gatekeeper.** You are strictly forbidden from manually editing the YAML block; you must use the CLI (`<skill-path>/scripts/sdd.sh`).
+### 0. Bootstrap / Reset (CLI only)
+- Initialize repo: `bash <skill-path>/scripts/init.sh --test-cmd "<cmd>"`
+- Reset repo: `bash <skill-path>/scripts/reset.sh`
 
-## Conversational Lifecycle
+### 1. Ideation & Doubt (`workflows/sdd_doubt.py`)
+- Ask up to 3 high-impact clarifying questions (with your recommendation attached) before planning.
+- To stress-test a non-trivial architectural claim or artifact with fresh-context adversarial review:
+  `run_workflow(ScriptPath="<skill-path>/workflows/sdd_doubt.py", Description="Adversarial doubt cycle", Args={"claim": "...", "artifact": "...", "contract": "..."})`
 
-### 1. Phase Zero: Ideation (Doubt-Driven Development)
-When the user proposes a feature, ask clarifying questions until all ambiguities are eliminated. Do not write code.
+### 2. Planning (`workflows/sdd_plan.py`)
+- Generate, self-audit across 4 parallel axes, render `plans/PLAN-N.md`, and lock `sdd_state: plan`:
+  `run_workflow(ScriptPath="<skill-path>/workflows/sdd_plan.py", Description="Draft and audit SDD plan", Args={"title": "...", "spec": "...", "decompose": False})`
+- Present the resulting plan and ask: *"¿Apruebas este plan para comenzar la ejecución?"*. Do **not** execute a phase in the same turn.
 
-### 2. Planning Phase (Plan - SDD)
-- Draft a structured plan (`PLAN-*.md`) breaking down the feature into atomic phases (F1, F2, F3...) based on the specification.
-- Upon completion, ask: *"¿Apruebas este plan para comenzar la ejecución?"*.
-- **Hidden Action:** Once the user approves, execute in the terminal: `./scripts/sdd.sh advance plan`.
+### 3. Phase Execution & Verification (`workflows/sdd_execute.py`)
+- When the user approves starting a phase (e.g. `"Inicia F1"`), run:
+  `run_workflow(ScriptPath="<skill-path>/workflows/sdd_execute.py", Description="Execute and verify phase F1", Args={"phase": "F1"})`
+  *(For independent parallel phases on isolated shared workspaces: `Args={"phases": ["F1", "F2"]}`)*
+- The workflow automatically validates `SESSION.md` ancestry, runs `sdd.sh start F<N>`, isolates **TDD RED** (tests with `CRIT-XX` IDs) from **TDD GREEN** (implementation + `feat(F<N>): ...` commits), triggers conditional Security/DoD audit if sensitive surfaces are touched, runs `sdd.sh verify F<N>`, ticks `- [x]` in `PLAN-N.md`, and halts for human diff audit.
+- **Fallback (if `run_workflow` tool is unavailable):** Execute `<skill-path>/scripts/sdd.sh start F<N>`, write `CRIT-XX` failing tests first (RED) then implementation (GREEN), and run `<skill-path>/scripts/sdd.sh verify F<N>` before ticking any criterion.
 
-### 3. Execution Phase (Execute)
-- When the user instructs to start a phase (e.g., *"Inicia F1"*), **YOU MUST first execute:** `./scripts/sdd.sh start F1`.
-- In multi-agent work, claim the phase with your name (`./scripts/sdd.sh start F1 <agent>`) and follow `references/multi-agent.md` (one agent per phase, branch per phase).
-- Only after the script confirms the state change, proceed to write source code, strictly adhering to the specification boundaries.
-
-### 4. Verification Phase (Verify - TDD)
-- Upon finishing the code for a phase, write the corresponding tests according to defined patterns and run them in the terminal.
-- Evaluate the work against `references/definition-of-done.md`.
-- **Hidden Action:** If tests pass and everything complies with the standard, execute in the terminal: `./scripts/sdd.sh advance verify`.
-- Inform the user: *"Fase verificada y registrada. ¿Avanzamos a la siguiente?"*.
-
-## Block Resolution (Hard Fails)
-If at any point you attempt to commit or advance without permission, and the terminal returns `exit code 1` (Git hooks error), **stop immediately**. Read the Git error output, inform the user that the operating system rejected the action, and use `./scripts/sdd.sh` to align the state properly.
-
-## Upgrade Path (Non-Goals)
-This harness provides contract-based gates enforced via Git hooks, Bash, and the project's own test suite. It is intentionally not transactional: no locks, no rollback, no crash-resilient state, no protection against two agents writing `SESSION.md` at once (see `references/plan-cycle.md` and `README.md` §8).
-If a project ever needs code-enforced, crash-resilient state (distributed locks, AST parsers, background daemons, external DB), that is explicitly out of scope for Discipline Flow and requires a different system.
+### 4. Cycle Close (`workflows/sdd_close.py`)
+- After the final phase is audited, run the C2 cycle closure audit (unticked boxes, reality vs. plan, scope leaks):
+  `run_workflow(ScriptPath="<skill-path>/workflows/sdd_close.py", Description="Close SDD cycle")`
