@@ -18,7 +18,7 @@ Cuando un agente de IA programa guiado solo por instrucciones de texto (prosa), 
 * **Capa 2 — Muro de Contención Físico (`scripts/` + Git Hooks):**
   * **`pre-commit`**: Bloquea archivos de secretos (`.env*`, `*.pem`, `*.key`, llaves privadas) en todo momento, y bloquea cualquier cambio a archivos de código fuente mientras `sdd_state` sea `plan`.
   * **`commit-msg`**: Exige Conventional Commits y obliga a referenciar la fase activa (ej. `feat(F1): ...`) durante `execute`.
-  * **`verify-crit.sh`**: Verifica sintácticamente que cada criterio `CRIT-XX` tenga un test real en el repositorio, audita que no existan commits evasores (`--no-verify`) desde el inicio de la fase y corre la suite de pruebas completa.
+  * **`verify-crit.sh`**: Verifica sintácticamente que cada criterio `CRIT-XX` tenga un test real en el repositorio, audita que no existan commits evasores (`--no-verify`) desde el inicio de la fase y corre la suite de pruebas completa. Si todo está en verde, **tilda automáticamente** (vía `tick-plan.sh`) los `CRIT-XX` automatizados de la fase y los criterios de ciclo derivables; los `(manual)` quedan para el humano.
 
 ---
 
@@ -55,6 +55,7 @@ discipline-flow/
 │   ├── package.sh                # Generador del distribuible zip versionado (release)
 │   ├── sdd.sh                    # Fachada CLI unificada SDD (start, plan, verify, advance, status)
 │   ├── verify-crit.sh            # Gate determinista de trazabilidad CRIT-XX, bypass audit y test runner
+│   ├── tick-plan.sh              # Único escritor de `- [x]` en PLAN-N.md (fase, ciclo, scope-clean)
 │   ├── new-plan.sh               # Generador de nuevos planes numerados (plans/PLAN-N.md)
 │   ├── lib/
 │   │   └── sdd-common.sh         # Helpers compartidos SESSION/PLAN (POSIX sh)

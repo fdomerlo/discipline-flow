@@ -19,5 +19,5 @@ When the `run_workflow` tool is available, delegate SDD orchestration to the det
 ## Direct CLI Protocol (Subagents & Non-Workflow Environments)
 - **Activate phase before coding:** `{{SKILL_PATH}}/scripts/sdd.sh start F<N> [agent]`
 - **Traceability (`CRIT-XX`):** Every automated criterion in `plans/PLAN-*.md` (`CRIT-01`, `CRIT-02`, ...) MUST map to a test whose name/tag includes that exact `CRIT-XX` identifier. Write failing tests first (RED), then minimal implementation (GREEN).
-- **Deterministic verification gate:** Run `{{SKILL_PATH}}/scripts/sdd.sh verify F<N>` (which invokes `{{SKILL_PATH}}/scripts/verify-crit.sh`). Stop and wait for human diff audit after each phase (`Human review: pending`).
+- **Deterministic verification gate:** Run `{{SKILL_PATH}}/scripts/sdd.sh verify F<N>` (which invokes `{{SKILL_PATH}}/scripts/verify-crit.sh`). On success it **automatically ticks** the verified automated `CRIT-XX` boxes of that phase and the derivable "whole cycle" criteria in `PLAN-*.md` (via `{{SKILL_PATH}}/scripts/tick-plan.sh`; never tick by hand). `(manual)` criteria are ticked only by the human. Stop and wait for human diff audit after each phase (`Human review: pending`).
 <!-- END DISCIPLINE-FLOW -->

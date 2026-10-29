@@ -301,6 +301,11 @@ case "$COMMAND" in
             fi
             VERIFY_EXIT=$?
             if [[ $VERIFY_EXIT -eq 0 ]]; then
+                # verify-crit.sh ticked the plan: re-freeze the hash so the
+                # machine-made edit is not reported as spec drift.
+                if [[ -n "$PLAN_FILE" && -f "$PLAN_FILE" ]]; then
+                    set_val "plan_hash" "$(calc_plan_hash "$PLAN_FILE")"
+                fi
                 set_val "sdd_state" "verify"
                 refresh_body "phase-closed, awaiting human audit" "Auditar el diff humano de ${PHASE_ID:-la fase} y aprobar; luego iniciar la siguiente fase"
                 echo "✅ Verificación exitosa. Estado avanzado a: verify"

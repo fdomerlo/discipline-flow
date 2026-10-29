@@ -145,33 +145,22 @@ def discover_test_command():
     return os.environ.get("TEST_COMMAND", "true")
 
 
-def tick_verified_criteria_in_plan(plan_file, phase_id, automated_ids):
-    with open(plan_file, "r", encoding="utf-8") as f:
-        lines = f.read().splitlines()
+def tick_verified_criteria_in_plan(plan_file, phase_id, skill_dir):
+    """Delegate to scripts/tick-plan.sh (single writer of `- [x]`).
 
-    header_re = re.compile(rf"^## {re.escape(phase_id)}([^0-9]|$)")
-    in_phase = False
-    new_lines = []
-    id_set = set(automated_ids)
-
-    for line in lines:
-        if header_re.match(line):
-            in_phase = True
-            new_lines.append(line)
-            continue
-        if in_phase and line.startswith("## "):
-            in_phase = False
-        if in_phase and "(manual)" not in line.lower():
-            for cid in id_set:
-                if re.match(rf"^- \[ \] {re.escape(cid)}:", line):
-                    line = re.sub(r"^- \[ \]", "- [x]", line, count=1)
-                    break
-        new_lines.append(line)
-
-    tmp_plan = f"{plan_file}.tmp.{os.getpid()}"
-    with open(tmp_plan, "w", encoding="utf-8") as f:
-        f.write("\n".join(new_lines) + "\n")
-    os.replace(tmp_plan, plan_file)
+    sdd.sh verify already ticks on success; this call is an idempotent safety
+    net so the workflow never closes a phase with the plan left unticked.
+    """
+    tick_cli = os.path.join(skill_dir, "scripts", "tick-plan.sh")
+    if not os.path.isfile(tick_cli):
+        raise RuntimeError(f"tick-plan.sh not found at '{tick_cli}'.")
+    for mode_args in (["phase", plan_file, phase_id], ["cycle", plan_file]):
+        subprocess.run(
+            ["bash", tick_cli, *mode_args],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
 
 
 def update_session_body_atomic(plan_file, phase_id, green_data):
@@ -459,9 +448,7 @@ else:
             )
 
     # Python ticks automated criteria in PLAN-N.md ONLY after verify_proc.returncode == 0
-    tick_verified_criteria_in_plan(
-        plan_file, f_id, [cid for cid, _ in automated_crits]
-    )
+    tick_verified_criteria_in_plan(plan_file, f_id, skill_dir)
     update_session_body_atomic(plan_file, f_id, green_data)
 
     # Build the Spanish C1 Phase Closure Report

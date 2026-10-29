@@ -173,6 +173,29 @@ leftovers_md = (
     or "- Sin remanentes pendientes."
 )
 
+# 4. Deterministic ticking of the cycle criteria (single writer: tick-plan.sh).
+# "Full suite green" / "Every phase's criteria" derive from the phase ticks;
+# the "Out of scope" line is ticked only if the scope audit found no leaks.
+def _find_tick_cli():
+    for cand in [args.get("skill_dir") or "", ".", ".agents/skills/discipline-flow"]:
+        if cand and os.path.isfile(os.path.join(cand, "scripts", "tick-plan.sh")):
+            return os.path.join(cand, "scripts", "tick-plan.sh")
+    if os.path.isfile("AGENTS.md"):
+        with open("AGENTS.md", "r", encoding="utf-8") as fh:
+            m = re.search(r"([A-Za-z0-9_./-]+?)/scripts/sdd\.sh", fh.read())
+        if m and os.path.isfile(os.path.join(m.group(1), "scripts", "tick-plan.sh")):
+            return os.path.join(m.group(1), "scripts", "tick-plan.sh")
+    return None
+
+
+tick_cli = _find_tick_cli()
+cycle_ticks_note = "tick-plan.sh no encontrado: criterios de ciclo sin actualizar."
+if tick_cli:
+    subprocess.run(["bash", tick_cli, "cycle", plan_file], check=True, capture_output=True, text=True)
+    if not scope_res.get("scope_leaks"):
+        subprocess.run(["bash", tick_cli, "scope-clean", plan_file], check=True, capture_output=True, text=True)
+    cycle_ticks_note = "Criterios de ciclo actualizados en el plan según los resultados deterministas."
+
 c2_report = (
     f"## Reporte de Cierre de Ciclo (C2) — `{plan_file}`\n\n"
     f"### 1. Cajas sin Tildar (`- [ ]`) — {len(unticked_boxes)} pendientes / {len(ticked_boxes)} completadas\n"
@@ -185,7 +208,8 @@ c2_report = (
     f"### 4. Remanentes (para `BACKLOG.md` / Issues)\n"
     f"{leftovers_md}\n\n"
     f"### 5. Veredicto Honesto\n"
-    f"{scope_res.get('honest_verdict', '')}\n"
+    f"{scope_res.get('honest_verdict', '')}\n\n"
+    f"_{cycle_ticks_note}_\n"
 )
 
 print(c2_report)

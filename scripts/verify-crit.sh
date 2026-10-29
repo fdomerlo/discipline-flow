@@ -92,7 +92,7 @@ while IFS= read -r line; do
   # Si está marcado explícitamente como manual
   if echo "$line" | grep -qi '(manual)'; then
     echo "| $CRIT_ID | Manual | Pendiente de verificación humana |"
-    MANUAL_COUNT=$((MANUAL_COUNT + 1))\
+    MANUAL_COUNT=$((MANUAL_COUNT + 1))
     continue
   fi
 
@@ -192,6 +192,22 @@ elif [ -n "${TEST_COMMAND:-}" ]; then
 else
   echo "ERROR: ❌ No se detectó suite de pruebas ejecutable para validar los criterios. El gate de verificación requiere pruebas reales demostrables." >&2
   exit 1
+fi
+
+# 5. Auto-tick (única vía de escritura de `- [x]`): solo se llega aquí si la
+# trazabilidad, la auditoría de bypass y la suite están en verde. Se tildan los
+# criterios automatizados verificados y los criterios de ciclo derivables.
+# Los criterios `(manual)` quedan para el humano.
+if [ -x "$SCRIPT_DIR/tick-plan.sh" ]; then
+  if [ -n "$PHASE_ID" ]; then
+    _T1=$("$SCRIPT_DIR/tick-plan.sh" phase "$PLAN_FILE" "$PHASE_ID")
+  else
+    _T1=$("$SCRIPT_DIR/tick-plan.sh" all "$PLAN_FILE")
+  fi
+  _T2=$("$SCRIPT_DIR/tick-plan.sh" cycle "$PLAN_FILE")
+  echo "Plan actualizado: $_T1 criterio(s) de fase y $((_T2)) de ciclo tildados en $PLAN_FILE."
+else
+  echo "Warning: $SCRIPT_DIR/tick-plan.sh no encontrado; el plan NO fue actualizado." >&2
 fi
 
 echo "VEREDICTO: ✅ Criterios verificados y suite de pruebas en verde."

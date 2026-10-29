@@ -39,8 +39,8 @@ Instead of loading ~100 KB of prose manuals into the context window, Discipline-
   `run_workflow(ScriptPath="<skill-path>/workflows/sdd_execute.py", Description="Execute and verify phase F1", Args={"phase": "F1"})`
   *(For independent parallel phases on isolated shared workspaces: `Args={"phases": ["F1", "F2"]}`)*
 - The workflow automatically validates `SESSION.md` ancestry, runs `sdd.sh start F<N>`, isolates **TDD RED** (tests with `CRIT-XX` IDs) from **TDD GREEN** (implementation + `feat(F<N>): ...` commits), triggers conditional Security/DoD audit if sensitive surfaces are touched, runs `sdd.sh verify F<N>`, ticks `- [x]` in `PLAN-N.md`, and halts for human diff audit.
-- **Fallback (if `run_workflow` tool is unavailable):** Execute `<skill-path>/scripts/sdd.sh start F<N>`, write `CRIT-XX` failing tests first (RED) then implementation (GREEN), and run `<skill-path>/scripts/sdd.sh verify F<N>` before ticking any criterion.
+- **Fallback (if `run_workflow` tool is unavailable):** Execute `<skill-path>/scripts/sdd.sh start F<N>`, write `CRIT-XX` failing tests first (RED) then implementation (GREEN), and run `<skill-path>/scripts/sdd.sh verify F<N>`: on success it ticks the verified `CRIT-XX` boxes (and derivable cycle criteria) in `PLAN-N.md` by itself via `scripts/tick-plan.sh`. Never tick by hand; `(manual)` criteria are ticked by the human.
 
 ### 4. Cycle Close (`workflows/sdd_close.py`)
-- After the final phase is audited, run the C2 cycle closure audit (unticked boxes, reality vs. plan, scope leaks):
+- After the final phase is audited, run the C2 cycle closure audit (unticked boxes, reality vs. plan, scope leaks; ticks "Out of scope" criterion only if no leaks):
   `run_workflow(ScriptPath="<skill-path>/workflows/sdd_close.py", Description="Close SDD cycle")`
