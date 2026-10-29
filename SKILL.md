@@ -1,53 +1,76 @@
 ---
 name: discipline-flow
-description: Enforces a disciplined Spec-Driven Development (SDD) workflow with explicit planning, execution, verification, and Git-based state gates. Use when implementing features, fixing bugs, or modifying software in a repository governed by Discipline Flow.
+description: Deterministic Spec-Driven Development (SDD) gatekeeper enforced via JSON Schemas, OS-level Git hooks, Bash CLI, and Antigravity run-workflow orchestration.
 license: MIT
 metadata:
   author: fdomerlo
-  version: 1.8.1
+  version: 2.0.0
 ---
 
-# Operational Contract: SDD Gatekeeper (Discipline-Flow)
+# Discipline Flow — Operational Specification
 
-## Your Role and Philosophy
-You are a Principal Software Engineer operating strictly under the paradigms described in `references/spec-driven-development.md` and `references/test-driven-development.md`. Your goal is to guide the user conversationally through the software lifecycle, maintaining zero friction in the chat, while enforcing absolute rigor in code.
+## 1. Language & State Invariants (HARD RULES)
+- **Human-facing outputs (chat, `plans/PLAN-*.md`, `SESSION.md` body, audit tables, closure reports):** **SPANISH**.
+- **Code, comments, commit messages, error strings, and test identifiers:** **ENGLISH**.
+- **State immutability:** Never hand-edit the YAML frontmatter (`--- ... ---`) of `SESSION.md`. Mutate state exclusively via `<skill-path>/scripts/sdd.sh`.
+- **In-place execution:** Execute scripts, schemas, and workflows directly from `<skill-path>` (recorded in `AGENTS.md`). Never vendor or copy them into the target project.
 
-Use the documents `definition-of-done.md`, `testing-patterns.md`, `doubt-driven-development.md`, and `task-breakdown.md` located in the `references/` directory as complementary knowledge bases. Apply them implicitly in all your responses.
+## 2. Deterministic Contracts (`assets/schemas/`)
+All planning, decomposition, state checkpoints, and blind audits must validate against these JSON Schemas:
+- `assets/schemas/spec_verification.json`: Pre-execution gate for `plans/PLAN-N.md` (`approved`, `commands`, `boundaries`, `criteria` with `^CRIT-[0-9]{2,}$`, empty `open_questions`).
+- `assets/schemas/task_breakdown.json`: Atomic task DAG (`affected_files` capped at `1..5`, `tests_to_create`, `criteria_ids`, `dependencies`, `parallelizable`).
+- `assets/schemas/audit_verdict.json`: Blind Doubt-Driven review output (`passed`, `cycle` `1..3`, `coverage`, `violations` classified as `contract_misread | actionable | trade_off | noise`).
+- `assets/schemas/session_state.json`: Formal schema for `SESSION.md` (`sdd_state` in `plan | execute | verify`, `active_task`, `plan_hash`, `base_commit`, `human_review`).
 
-## Unbreakable Language Rule (CRITICAL)
-**You MUST communicate with the user and author all human-facing auditable outputs in SPANISH.**
-Even though this operational contract is written in English for deterministic instruction following, every conversational response, user interaction, plan (`PLAN-*.md`), session checkpoint (`SESSION.md` body), audit evidence table, and closure report MUST be written in Spanish.
-Exception (project convention, aligned with `AGENTS.md` contract): code, code comments, error messages, commit messages, and test identifiers/symbols remain in English.
+## 3. CLI Gatekeeper Commands (`scripts/`)
 
-## Infrastructure Rule (CRITICAL)
-The repository is protected by OS-level Git hooks (`pre-commit`, `commit-msg`). Project state is immutable and resides in a YAML frontmatter block inside `assets/SESSION.md.template` (or runtime `SESSION.md`).
-Skill scripts and assets are used in place from the skill directory — they are never copied into the project, and plans/`SESSION.md` live in the project, never in the skill. The concrete CLI path is recorded in `AGENTS.md` (e.g. `.agents/skills/discipline-flow/scripts/sdd.sh`); every `./scripts/...` below is shorthand for it.
-**YOU are responsible for executing terminal commands silently to synchronize our chat with the physical gatekeeper.** You are strictly forbidden from manually editing the YAML block; you must use the CLI (`<skill-path>/scripts/sdd.sh`).
+| Action | Executable Command | Exit Codes / Effect |
+| :--- | :--- | :--- |
+| **Bootstrap repo** | `bash <skill-path>/scripts/init.sh --test-cmd "<cmd>"` | Installs `AGENTS.md` shim + `.git/hooks/{pre-commit,commit-msg}` |
+| **New plan cycle** | `<skill-path>/scripts/sdd.sh plan "<title>"` | Scaffolds `plans/PLAN-N.md` from `assets/PLAN.md.template`, sets `sdd_state: plan` |
+| **Start phase** | `<skill-path>/scripts/sdd.sh start F<N> [agent]` | Freezes `plan_hash`, records `Phase-start commit`, sets `sdd_state: execute` |
+| **Verify phase (MD)** | `<skill-path>/scripts/sdd.sh verify F<N>` | Runs `verify-crit.sh` + test runner; sets `sdd_state: verify` on `0` |
+| **Verify phase (JSON)** | `<skill-path>/scripts/sdd.sh verify --json F<N>` | Emits machine-parseable JSON (`0`=pass, `1`=precondition/test fail, `2`=missing CRIT/bypass/open decision) |
+| **Prepare workflow** | `<skill-path>/scripts/sdd.sh orchestrate F<N> [--plan <path>]` | Emits JSON payload (`ScriptPath`, `Cwd`, `Args`) for `run_workflow` |
+| **Force state** | `<skill-path>/scripts/sdd.sh advance <plan\|execute\|verify>` | Transitions `sdd_state` in `SESSION.md` |
+| **Inspect state** | `<skill-path>/scripts/sdd.sh status` | Prints active state, task, agent, and `plan_hash` integrity |
+| **Reset repo** | `bash <skill-path>/scripts/reset.sh [--dry-run\|--force]` | Removes skill hooks, `SESSION.md`, `plans/`, and `AGENTS.md` block |
 
-## Conversational Lifecycle
+## 4. Automated Orchestration (`run_workflow`)
+To execute a full phase deterministically in Antigravity, generate the arguments via `sdd.sh orchestrate F<N>` and invoke the `run_workflow` tool:
 
-### 1. Phase Zero: Ideation (Doubt-Driven Development)
-When the user proposes a feature, ask clarifying questions until all ambiguities are eliminated. Do not write code.
+```python
+run_workflow(
+    ScriptPath="<skill-path>/workflows/sdd_cycle.py",
+    Cwd="<workspace-root>",
+    Description="Execute Discipline Flow SDD cycle for F1",
+    Args={
+        "plan_file": "plans/PLAN-1.md",
+        "phase_id": "F1",
+        "workspace_root": "<workspace-root>",
+        "skill_root": "<skill-path>",
+        "test_cmd": "<test-command>",
+        "lint_cmd": "<lint-command-or-none>",
+        "max_doubt_cycles": 3
+    }
+)
+```
 
-### 2. Planning Phase (Plan - SDD)
-- Draft a structured plan (`PLAN-*.md`) breaking down the feature into atomic phases (F1, F2, F3...) based on the specification.
-- Upon completion, ask: *"¿Apruebas este plan para comenzar la ejecución?"*.
-- **Hidden Action:** Once the user approves, execute in the terminal: `./scripts/sdd.sh advance plan`.
+**Stages executed by `workflows/sdd_cycle.py`:**
+1. `phase("Audit Spec")`: Evaluates `PLAN-N.md` against `spec_verification.json` and extracts `task_breakdown.json`.
+2. `phase("Atomic Implementation")`: Runs conflict-free task waves concurrently via `parallel(..., workspace="branch")`.
+3. `phase("Mechanical Gate")`: Invokes `verify-crit.sh --json` and linters via `call_tool("run_command", ...)`.
+4. `phase("Doubt-Driven Audit")`: Runs a persistent blind adversarial agent (`1..3` cycles) stripping author claims (`ARTIFACT + CONTRACT` only) validated against `audit_verdict.json`.
 
-### 3. Execution Phase (Execute)
-- When the user instructs to start a phase (e.g., *"Inicia F1"*), **YOU MUST first execute:** `./scripts/sdd.sh start F1`.
-- In multi-agent work, claim the phase with your name (`./scripts/sdd.sh start F1 <agent>`) and follow `references/multi-agent.md` (one agent per phase, branch per phase).
-- Only after the script confirms the state change, proceed to write source code, strictly adhering to the specification boundaries.
-
-### 4. Verification Phase (Verify - TDD)
-- Upon finishing the code for a phase, write the corresponding tests according to defined patterns and run them in the terminal.
-- Evaluate the work against `references/definition-of-done.md`.
-- **Hidden Action:** If tests pass and everything complies with the standard, execute in the terminal: `./scripts/sdd.sh advance verify`.
-- Inform the user: *"Fase verificada y registrada. ¿Avanzamos a la siguiente?"*.
-
-## Block Resolution (Hard Fails)
-If at any point you attempt to commit or advance without permission, and the terminal returns `exit code 1` (Git hooks error), **stop immediately**. Read the Git error output, inform the user that the operating system rejected the action, and use `./scripts/sdd.sh` to align the state properly.
-
-## Upgrade Path (Non-Goals)
-This harness provides contract-based gates enforced via Git hooks, Bash, and the project's own test suite. It is intentionally not transactional: no locks, no rollback, no crash-resilient state, no protection against two agents writing `SESSION.md` at once (see `references/plan-cycle.md` and `README.md` §8).
-If a project ever needs code-enforced, crash-resilient state (distributed locks, AST parsers, background daemons, external DB), that is explicitly out of scope for Discipline Flow and requires a different system.
+## 5. Reference Index (`references/`)
+Load on demand only when specific protocol rules are needed:
+- `references/bootstrap.md`: Flow A — Repository initialization (`init.sh`) and reset (`reset.sh`).
+- `references/plan-cycle.md`: Flow B — Capability map DAG, ambiguity gate, `PLAN-N.md` authoring, and vertical task slicing (`≤ 5` files).
+- `references/test-driven-development.md`: RED-GREEN-REFACTOR loop, `CRIT-XX` naming, and test double hierarchy.
+- `references/doubt-driven-development.md`: Blind adversarial audit and finding precedence (`contract_misread > actionable > trade_off > noise`).
+- `references/phase-close.md`: Flow C — Standing Definition of Done, C1 phase close, and C2 cycle close.
+- `references/multi-agent.md`: Phase claiming (`start F<N> <agent>`) and branch isolation rules.
+- `references/security-checklist.md`: Threat modeling, AuthN/AuthZ, path/query containment, lockfiles, and AI/LLM boundaries.
+Load on demand only when operating conversationally or auditing security-critical paths:
+- `references/protocol-invariants.md`: Phase 0 capability map DAG, ambiguity gate (≤ 3 questions), TDD double hierarchy (`Real > Fake > Stub > Mock`), Doubt-Driven finding precedence, and C1/C2 closure reports.
+- `references/security-checklist.md`: Threat modeling, AuthN/AuthZ, path/query containment (`realpath`), lockfile hygiene, and AI/LLM boundaries.

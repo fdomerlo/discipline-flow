@@ -1,0 +1,46 @@
+{
+  "name": "sdd-cycle",
+  "description": "End-to-end Discipline Flow SDD phase orchestrator: Spec Audit, Parallel Branch Implementation, Mechanical Gate, and Blind Doubt-Driven Audit.",
+  "entry": "sdd_cycle.py",
+  "args": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["plan_file", "phase_id"],
+    "properties": {
+      "plan_file": {
+        "type": "string",
+        "pattern": "^([a-zA-Z0-9_.-]+/)?PLAN-[0-9]+(\\.[0-9]+)?\\.md$",
+        "description": "Path to the active PLAN-N.md specification."
+      },
+      "phase_id": {
+        "type": "string",
+        "pattern": "^F[0-9]+$",
+        "description": "Target phase identifier (e.g. F1)."
+      },
+      "workspace_root": {
+        "type": "string",
+        "description": "Absolute path to the target project workspace."
+      },
+      "skill_root": {
+        "type": "string",
+        "description": "Absolute path to the discipline-flow skill directory."
+      },
+      "test_cmd": {
+        "type": "string",
+        "description": "Explicit test runner command override."
+      },
+      "lint_cmd": {
+        "type": "string",
+        "description": "Explicit linter command override ('none' to skip)."
+      },
+      "max_doubt_cycles": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3,
+        "default": 3,
+        "description": "Maximum Doubt-Driven adversarial review iterations (capped at 3)."
+      }
+    }
+  }
+}

@@ -14,22 +14,11 @@
 {{CONCRETE_SPEC}}
 
 **Tests:**
-- For fixes/regressions: write the adversarial test first, confirm it fails against current code (RED), then fix, then confirm GREEN.
-- For new features/refactoring: verify baseline suite passes, add specification tests for new behavior, and verify full green suite.
 {{WHAT_THE_TESTS_MUST_PROVE}}
 
 ### Acceptance criteria
 - [ ] CRIT-01: {{CHECKABLE_CRITERION_1}}
 - [ ] CRIT-02: {{CHECKABLE_CRITERION_2}}
-
-<!-- Use sequential IDs: CRIT-01, CRIT-02, etc. (typically 2-7 atomic criteria per phase).
-     Each automated criterion must be verified by a test whose name contains the exact CRIT-XX ID.
-     Manual criteria that only a human can verify also carry an ID: e.g. - [ ] CRIT-03: (manual) <requirement>.
-     Ticked only as demonstrated with a passing test or during human review, never in advance. -->
-
-<!-- Repeat an F-block per phase. Keep each phase small enough to review
-     as one diff. If a phase needs a second phase to make sense, that's
-     two phases, not one. -->
 
 ## Out of scope
 

@@ -2,17 +2,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SESSION_FILE="SESSION.md"
 
 # Shared helpers (canonical): scripts/lib/sdd-common.sh.
-# Fallback inline definitions below keep already-bootstrapped projects working.
 if [[ -f "$SCRIPT_DIR/lib/sdd-common.sh" ]]; then
     # shellcheck source=lib/sdd-common.sh
     . "$SCRIPT_DIR/lib/sdd-common.sh"
 fi
 
 # Resuelve el archivo PLAN actual (canonical: plans/, legacy: root).
-# Delegates to sdd_resolve_plan() from lib when available.
 resolve_plan_file() {
     if command -v sdd_resolve_plan >/dev/null 2>&1; then
         sdd_resolve_plan "$SESSION_FILE"
@@ -35,7 +34,6 @@ resolve_plan_file() {
     echo "$plan"
 }
 
-# Calcula sha256 nativo con coreutils
 calc_plan_hash() {
     if command -v sdd_calc_hash >/dev/null 2>&1; then
         sdd_calc_hash "$1"
@@ -49,7 +47,38 @@ calc_plan_hash() {
     fi
 }
 
-# Asegurar que SESSION.md existe con frontmatter básico si no está presente
+scaffold_new_plan() {
+    local title="${1:-New Cycle}"
+    local tpl="$SKILL_DIR/assets/PLAN.md.template"
+    [[ -f "$tpl" ]] || return 0
+
+    local target_dir="plans"
+    mkdir -p "$target_dir"
+
+    local highest=0
+    local f base num
+    shopt -s nullglob
+    for f in "$target_dir"/PLAN-*.md PLAN-*.md; do
+        if [[ -f "$f" ]]; then
+            base="$(basename "$f")"
+            if [[ "$base" =~ ^PLAN-([0-9]+) ]]; then
+                num="${BASH_REMATCH[1]}"
+                (( num > highest )) && highest=$num
+            fi
+        fi
+    done
+    shopt -u nullglob
+
+    local next_n=$((highest + 1))
+    local out_file="$target_dir/PLAN-$next_n.md"
+    local content
+    content="$(<"$tpl")"
+    content="${content//\{\{N\}\}/$next_n}"
+    content="${content//\{\{TITLE\}\}/$title}"
+    printf '%s\n' "$content" > "$out_file"
+    echo "Created new plan: $out_file"
+}
+
 ensure_session_file() {
     if [[ ! -f "$SESSION_FILE" ]]; then
         local current_plan
@@ -134,7 +163,6 @@ set_val() {
     mv "$tmp_file" "$SESSION_FILE"
 }
 
-# CLI path as invoked from the project root (for body hints).
 cli_path() {
     if command -v realpath >/dev/null 2>&1; then
         realpath --relative-to=. "$SCRIPT_DIR/sdd.sh" 2>/dev/null || echo "./scripts/sdd.sh"
@@ -143,10 +171,6 @@ cli_path() {
     fi
 }
 
-# Refresh machine-owned body fields of SESSION.md after a state transition.
-# Only touches Status/Updated/Base-commit bullets and the Next-action section;
-# free prose (Completed, Working state, Open decisions) belongs to the agent.
-# Usage: refresh_body "<status>" "<next-action>" ["base"]
 refresh_body() {
     local new_status="$1"
     local new_next="$2"
@@ -190,16 +214,12 @@ case "$COMMAND" in
     plan|new-plan)
         ensure_session_file
         TITLE="${ARG:-New Cycle}"
-        # Si existe el script new-plan.sh, lo invocamos
-        if [[ -x "$SCRIPT_DIR/new-plan.sh" ]]; then
-            "$SCRIPT_DIR/new-plan.sh" "$TITLE"
-        fi
+        scaffold_new_plan "$TITLE"
 
         PLAN_FILE=$(resolve_plan_file)
         NEW_HASH="none"
         if [[ -n "$PLAN_FILE" && -f "$PLAN_FILE" ]]; then
             NEW_HASH=$(calc_plan_hash "$PLAN_FILE")
-            # Actualizar linea de Plan en markdown
             sed -i "s|^- \*\*Plan:\*\*.*|- \*\*Plan:\*\* $PLAN_FILE|" "$SESSION_FILE" 2>/dev/null || true
         fi
 
@@ -225,17 +245,14 @@ case "$COMMAND" in
 
         ensure_session_file
 
-        # Aviso de reclamo multi-agente (coordinación, no bloqueo duro:
-        # el lock real exige daemon/DB y está fuera de alcance — ver SKILL.md).
         PREV_TASK=$(get_val "active_task")
         PREV_AGENT=$(get_val "active_agent")
         if [[ -n "$AGENT" && "$PREV_TASK" == "$PHASE_OR_TASK" && -n "$PREV_AGENT" && "$PREV_AGENT" != "none" && "$PREV_AGENT" != "$AGENT" ]]; then
             echo "⚠️  La fase '$PHASE_OR_TASK' está reclamada por el agente '$PREV_AGENT'." >&2
             echo "   Si trabajás en paralelo, coordiná con tu contraparte o usá branch-per-phase." >&2
-            echo "   Ver references/multi-agent.md. Continuando con el reclamo de '$AGENT'." >&2
+            echo "   Ver references/protocol-invariants.md. Continuando con el reclamo de '$AGENT'." >&2
         fi
 
-        # Validar y congelar hash del plan
         PLAN_FILE=$(resolve_plan_file)
         if [[ -n "$PLAN_FILE" && -f "$PLAN_FILE" ]]; then
             CURRENT_HASH=$(calc_plan_hash "$PLAN_FILE")
@@ -252,9 +269,6 @@ case "$COMMAND" in
             sed -i "s|^- \*\*Phase:\*\*.*|- \*\*Phase:\*\* $PHASE_OR_TASK|" "$SESSION_FILE" 2>/dev/null || true
         fi
 
-        # Marcador de inicio de fase para la auditoría de bypass (P2-10):
-        # los commits de código sin token de fase posteriores a este commit
-        # se reportan en verify como posible elusión de hooks (--no-verify).
         PHASE_BASE=$(git rev-parse HEAD 2>/dev/null || echo "uncommitted")
         if grep -q '^- \*\*Phase-start commit:' "$SESSION_FILE"; then
             sed -i "s|^- \*\*Phase-start commit:.*|- **Phase-start commit:** $PHASE_BASE|" "$SESSION_FILE" 2>/dev/null || true
@@ -279,10 +293,26 @@ case "$COMMAND" in
 
     verify)
         ensure_session_file
-        PHASE_ID="$ARG"
-        echo "🔍 Ejecutando verificación determinista de criterios..."
+        shift || true
+        VERIFY_JSON=0
+        PHASE_ID=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --json)
+                    VERIFY_JSON=1
+                    shift
+                    ;;
+                *)
+                    PHASE_ID="$1"
+                    shift
+                    ;;
+            esac
+        done
 
-        # Verificar si la especificación cambió mientras estábamos en execute
+        if [[ "$VERIFY_JSON" -eq 0 ]]; then
+            echo "🔍 Ejecutando verificación determinista de criterios..."
+        fi
+
         PLAN_FILE=$(resolve_plan_file)
         if [[ -n "$PLAN_FILE" && -f "$PLAN_FILE" ]]; then
             RECORDED_HASH=$(get_val "plan_hash")
@@ -294,17 +324,22 @@ case "$COMMAND" in
         fi
 
         if [[ -x "$SCRIPT_DIR/verify-crit.sh" ]]; then
+            VERIFY_ARGS=()
+            [[ "$VERIFY_JSON" -eq 1 ]] && VERIFY_ARGS+=("--json")
             if [[ -n "$PHASE_ID" ]]; then
-                "$SCRIPT_DIR/verify-crit.sh" "" "$PHASE_ID"
-            else
-                "$SCRIPT_DIR/verify-crit.sh"
+                VERIFY_ARGS+=("" "$PHASE_ID")
             fi
+            set +e
+            "$SCRIPT_DIR/verify-crit.sh" "${VERIFY_ARGS[@]}"
             VERIFY_EXIT=$?
+            set -e
             if [[ $VERIFY_EXIT -eq 0 ]]; then
                 set_val "sdd_state" "verify"
                 refresh_body "phase-closed, awaiting human audit" "Auditar el diff humano de ${PHASE_ID:-la fase} y aprobar; luego iniciar la siguiente fase"
-                echo "✅ Verificación exitosa. Estado avanzado a: verify"
-                echo "🛑 ALTO: Detén la ejecución y presenta el reporte para auditoría humana del diff."
+                if [[ "$VERIFY_JSON" -eq 0 ]]; then
+                    echo "✅ Verificación exitosa. Estado avanzado a: verify"
+                    echo "🛑 ALTO: Detén la ejecución y presenta el reporte para auditoría humana del diff."
+                fi
             else
                 exit $VERIFY_EXIT
             fi
@@ -312,8 +347,84 @@ case "$COMMAND" in
             echo "Warning: $SCRIPT_DIR/verify-crit.sh no encontrado o no ejecutable." >&2
             set_val "sdd_state" "verify"
             refresh_body "phase-closed, awaiting human audit" "Auditar el diff humano de ${PHASE_ID:-la fase} y aprobar; luego iniciar la siguiente fase"
-            echo "Estado cambiado a verify."
+            if [[ "$VERIFY_JSON" -eq 0 ]]; then
+                echo "Estado cambiado a verify."
+            fi
         fi
+        ;;
+
+    orchestrate|run)
+        ensure_session_file >/dev/null
+        shift || true
+        ORCH_PHASE=""
+        ORCH_PLAN=""
+        ORCH_TEST_CMD="${TEST_COMMAND:-}"
+        ORCH_LINT_CMD="none"
+        ORCH_MAX_CYCLES=3
+
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --plan)
+                    ORCH_PLAN="${2:-}"
+                    shift 2
+                    ;;
+                --test-cmd)
+                    ORCH_TEST_CMD="${2:-}"
+                    shift 2
+                    ;;
+                --lint-cmd)
+                    ORCH_LINT_CMD="${2:-}"
+                    shift 2
+                    ;;
+                --max-cycles)
+                    ORCH_MAX_CYCLES="${2:-3}"
+                    shift 2
+                    ;;
+                --json)
+                    shift
+                    ;;
+                *)
+                    if [[ -z "$ORCH_PHASE" ]]; then
+                        ORCH_PHASE="$1"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+
+        if [[ -z "$ORCH_PLAN" ]]; then
+            ORCH_PLAN=$(resolve_plan_file)
+        fi
+        if [[ -z "$ORCH_PHASE" ]]; then
+            ORCH_PHASE=$(get_val "active_task")
+            if [[ -z "$ORCH_PHASE" || "$ORCH_PHASE" == "none" ]]; then
+                ORCH_PHASE="F1"
+            fi
+        fi
+
+        WORKFLOW_SCRIPT="$SKILL_DIR/workflows/sdd_cycle.py"
+        if [[ ! -f "$WORKFLOW_SCRIPT" ]]; then
+            echo "Error: Workflow script no encontrado en '$WORKFLOW_SCRIPT'." >&2
+            exit 1
+        fi
+        if [[ -z "$ORCH_PLAN" || ! -f "$ORCH_PLAN" ]]; then
+            echo "Error: No se encontró un archivo PLAN-*.md válido para orquestar." >&2
+            exit 1
+        fi
+
+        WORKSPACE_ROOT="$(pwd)"
+        printf '{\n  "tool": "run_workflow",\n  "ScriptPath": "%s",\n  "Cwd": "%s",\n  "Description": "Execute Discipline Flow SDD cycle for %s (%s)",\n  "Args": {\n    "plan_file": "%s",\n    "phase_id": "%s",\n    "workspace_root": "%s",\n    "skill_root": "%s",\n    "test_cmd": "%s",\n    "lint_cmd": "%s",\n    "max_doubt_cycles": %d\n  }\n}\n' \
+            "$WORKFLOW_SCRIPT" \
+            "$WORKSPACE_ROOT" \
+            "$ORCH_PHASE" \
+            "$ORCH_PLAN" \
+            "$ORCH_PLAN" \
+            "$ORCH_PHASE" \
+            "$WORKSPACE_ROOT" \
+            "$SKILL_DIR" \
+            "$ORCH_TEST_CMD" \
+            "$ORCH_LINT_CMD" \
+            "$ORCH_MAX_CYCLES"
         ;;
 
     advance)
@@ -364,7 +475,7 @@ case "$COMMAND" in
         case "$CURRENT_STATE" in
             plan)
                 echo " 🔒 Código      : BLOQUEADO (solo .md/.txt permitidos, resto bloqueado por pre-commit)"
-                echo " Siguiente paso : ./scripts/sdd.sh start F1"
+                echo " Siguiente paso : ./scripts/sdd.sh start F1 (o ./scripts/sdd.sh orchestrate F1)"
                 ;;
             execute)
                 echo " 🔓 Código      : DESBLOQUEADO (commits deben incluir '$ACTIVE_TASK')"
@@ -379,13 +490,15 @@ case "$COMMAND" in
         ;;
 
     *)
-        echo "Uso: $0 {start <fase> [agente]|plan [titulo]|verify [fase]|advance <plan|execute|verify>|status}"
+        echo "Uso: $0 {start <fase> [agente]|plan [titulo]|verify [--json] [fase]|orchestrate [fase] [--plan <path>]|advance <plan|execute|verify>|status}"
         echo "Ejemplos:"
-        echo "  $0 start F1              # Desbloquea código para trabajar en la Fase 1"
-        echo "  $0 start F1 alice        # Igual, reclamando la fase para el agente 'alice'"
-        echo "  $0 verify F1             # Corre suite y validación CRIT-XX para Fase 1"
-        echo "  $0 plan \"Nueva función\"  # Inicia nuevo plan y bloquea commits de código"
-        echo "  $0 status                # Consulta el estado SDD actual"
+        echo "  $0 start F1                  # Desbloquea código para trabajar en la Fase 1"
+        echo "  $0 start F1 alice            # Igual, reclamando la fase para el agente 'alice'"
+        echo "  $0 verify F1                 # Corre suite y validación CRIT-XX para Fase 1"
+        echo "  $0 verify --json F1          # Igual, emitiendo resultado JSON determinista"
+        echo "  $0 orchestrate F1            # Emite el descriptor run_workflow para workflows/sdd_cycle.py"
+        echo "  $0 plan \"Nueva función\"      # Inicia nuevo plan y bloquea commits de código"
+        echo "  $0 status                    # Consulta el estado SDD actual"
         exit 1
         ;;
 esac

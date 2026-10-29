@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://discipline-flow.local/schemas/audit_verdict.json",
+  "title": "AuditVerdict",
+  "description": "Deterministic blind audit verdict emitted during Doubt-Driven Development and phase closure.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["passed", "cycle", "coverage", "violations", "summary"],
+  "properties": {
+    "passed": {
+      "type": "boolean",
+      "description": "True only when zero 'contract_misread' or 'actionable' violations remain and coverage is complete."
+    },
+    "cycle": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3,
+      "description": "Current adversarial review cycle (bounded at 3)."
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_criteria",
+        "verified_criteria",
+        "manual_criteria",
+        "missing_criteria",
+        "percentage"
+      ],
+      "properties": {
+        "total_criteria": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "verified_criteria": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manual_criteria": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CRIT-[0-9]{2,}$"
+          }
+        },
+        "percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "violations": {
+      "type": "array",
+      "description": "Issues discovered by the blind adversarial reviewer.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "category",
+          "severity",
+          "file",
+          "description",
+          "remediation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string",
+            "enum": ["contract_misread", "actionable", "trade_off", "noise"],
+            "description": "Precedence-ordered Doubt-Driven classification."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor", "info"]
+          },
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 5
+          },
+          "remediation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 10,
+      "description": "Concise audit verdict in Spanish for the human diff review."
+    }
+  }
+}

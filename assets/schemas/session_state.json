@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://discipline-flow.local/schemas/session_state.json",
+  "title": "SessionState",
+  "description": "Formal contract for SESSION.md YAML frontmatter and checkpoint fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sdd_state",
+    "active_task",
+    "active_agent",
+    "plan_hash",
+    "plan_file",
+    "base_commit",
+    "updated",
+    "human_review"
+  ],
+  "properties": {
+    "sdd_state": {
+      "type": "string",
+      "enum": ["plan", "execute", "verify"]
+    },
+    "active_task": {
+      "type": "string",
+      "pattern": "^(none|F[0-9]+)$"
+    },
+    "active_agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plan_hash": {
+      "type": "string",
+      "pattern": "^(none|[a-f0-9]{64})$"
+    },
+    "plan_file": {
+      "type": "string",
+      "pattern": "^(None|none|([a-zA-Z0-9_.-]+/)?PLAN-[0-9]+(\\.[0-9]+)?\\.md)$"
+    },
+    "phase_start_commit": {
+      "type": "string",
+      "pattern": "^(uncommitted|[a-f0-9]{7,40})$"
+    },
+    "base_commit": {
+      "type": "string",
+      "pattern": "^(uncommitted|[a-f0-9]{7,40})$"
+    },
+    "updated": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "human_review": {
+      "type": "string",
+      "enum": ["pending", "approved"]
+    }
+  }
+}
