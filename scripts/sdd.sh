@@ -427,6 +427,115 @@ case "$COMMAND" in
             "$ORCH_MAX_CYCLES"
         ;;
 
+    validate)
+        SCHEMA_ARG="${2:-}"
+        TARGET_JSON="${3:--}"
+        if [[ -z "$SCHEMA_ARG" ]]; then
+            echo "Error: Uso: $0 validate <spec_verification|task_breakdown|audit_verdict|session_state> [archivo.json|-]" >&2
+            exit 1
+        fi
+        if [[ -f "$SCHEMA_ARG" ]]; then
+            SCHEMA_PATH="$SCHEMA_ARG"
+        elif [[ -f "$SKILL_DIR/assets/schemas/${SCHEMA_ARG%.json}.json" ]]; then
+            SCHEMA_PATH="$SKILL_DIR/assets/schemas/${SCHEMA_ARG%.json}.json"
+        else
+            echo "Error: Schema '$SCHEMA_ARG' no encontrado en '$SKILL_DIR/assets/schemas/'." >&2
+            exit 1
+        fi
+
+        python3 -c '
+import json
+import re
+import sys
+
+schema_path, target_arg = sys.argv[1], sys.argv[2]
+with open(schema_path, "r", encoding="utf-8") as sf:
+    schema = json.load(sf)
+
+try:
+    if target_arg == "-":
+        payload = json.load(sys.stdin)
+    else:
+        with open(target_arg, "r", encoding="utf-8") as tf:
+            payload = json.load(tf)
+except Exception as exc:
+    print(json.dumps({"valid": False, "schema": schema_path, "errors": [f"Invalid JSON: {exc}"]}))
+    sys.exit(1)
+
+errors = []
+
+def check(val, sch, path="$"):
+    expected_type = sch.get("type")
+    if expected_type == "object":
+        if not isinstance(val, dict):
+            errors.append(f"{path}: expected object, got {type(val).__name__}")
+            return
+        for req in sch.get("required", []):
+            if req not in val:
+                errors.append(f"{path}: missing required property '{req}'")
+        props = sch.get("properties", {})
+        if sch.get("additionalProperties") is False:
+            for k in val:
+                if k not in props:
+                    errors.append(f"{path}: unexpected additional property '{k}'")
+        for k, v in val.items():
+            if k in props:
+                check(v, props[k], f"{path}.{k}")
+    elif expected_type == "array":
+        if not isinstance(val, list):
+            errors.append(f"{path}: expected array, got {type(val).__name__}")
+            return
+        if "minItems" in sch and len(val) < sch["minItems"]:
+            errors.append(f"{path}: array length {len(val)} < minItems {sch['minItems']}")
+        if "maxItems" in sch and len(val) > sch["maxItems"]:
+            errors.append(f"{path}: array length {len(val)} > maxItems {sch['maxItems']}")
+        if sch.get("uniqueItems") and len( list(map(json.dumps, val)) ) != len(set(map(json.dumps, val))):
+            errors.append(f"{path}: array items must be unique")
+        item_sch = sch.get("items")
+        if item_sch:
+            for idx, item in enumerate(val):
+                check(item, item_sch, f"{path}[{idx}]")
+    elif expected_type == "string":
+        if not isinstance(val, str):
+            errors.append(f"{path}: expected string, got {type(val).__name__}")
+            return
+        if "minLength" in sch and len(val) < sch["minLength"]:
+            errors.append(f"{path}: string length {len(val)} < minLength {sch['minLength']}")
+        if "pattern" in sch and not re.search(sch["pattern"], val):
+            errors.append(f"{path}: value '{val}' does not match pattern '{sch['pattern']}'")
+    elif expected_type == "boolean":
+        if not isinstance(val, bool):
+            errors.append(f"{path}: expected boolean, got {type(val).__name__}")
+            return
+    elif expected_type == "integer":
+        if isinstance(val, bool) or not isinstance(val, int):
+            errors.append(f"{path}: expected integer, got {type(val).__name__}")
+            return
+        if "minimum" in sch and val < sch["minimum"]:
+            errors.append(f"{path}: {val} < minimum {sch['minimum']}")
+        if "maximum" in sch and val > sch["maximum"]:
+            errors.append(f"{path}: {val} > maximum {sch['maximum']}")
+    elif expected_type == "number":
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            errors.append(f"{path}: expected number, got {type(val).__name__}")
+            return
+        if "minimum" in sch and val < sch["minimum"]:
+            errors.append(f"{path}: {val} < minimum {sch['minimum']}")
+        if "maximum" in sch and val > sch["maximum"]:
+            errors.append(f"{path}: {val} > maximum {sch['maximum']}")
+
+    if "enum" in sch and val not in sch["enum"]:
+        errors.append(f"{path}: value {val!r} not in enum {sch['enum']}")
+
+check(payload, schema)
+if errors:
+    print(json.dumps({"valid": False, "schema": schema_path, "errors": errors}))
+    sys.exit(1)
+print(json.dumps({"valid": True, "schema": schema_path, "errors": []}))
+sys.exit(0)
+' "$SCHEMA_PATH" "$TARGET_JSON"
+        ;;
+
     advance)
         NEW_STATE="$ARG"
         if [[ ! "$NEW_STATE" =~ ^(plan|execute|verify)$ ]]; then
@@ -490,15 +599,16 @@ case "$COMMAND" in
         ;;
 
     *)
-        echo "Uso: $0 {start <fase> [agente]|plan [titulo]|verify [--json] [fase]|orchestrate [fase] [--plan <path>]|advance <plan|execute|verify>|status}"
+        echo "Uso: $0 {start <fase> [agente]|plan [titulo]|verify [--json] [fase]|orchestrate [fase]|validate <schema> [json_file|-]|advance <plan|execute|verify>|status}"
         echo "Ejemplos:"
-        echo "  $0 start F1                  # Desbloquea código para trabajar en la Fase 1"
-        echo "  $0 start F1 alice            # Igual, reclamando la fase para el agente 'alice'"
-        echo "  $0 verify F1                 # Corre suite y validación CRIT-XX para Fase 1"
-        echo "  $0 verify --json F1          # Igual, emitiendo resultado JSON determinista"
-        echo "  $0 orchestrate F1            # Emite el descriptor run_workflow para workflows/sdd_cycle.py"
-        echo "  $0 plan \"Nueva función\"      # Inicia nuevo plan y bloquea commits de código"
-        echo "  $0 status                    # Consulta el estado SDD actual"
+        echo "  $0 start F1                        # Desbloquea código para trabajar en la Fase 1"
+        echo "  $0 start F1 alice                  # Igual, reclamando la fase para el agente 'alice'"
+        echo "  $0 verify F1                       # Corre suite y validación CRIT-XX para Fase 1"
+        echo "  $0 verify --json F1                # Igual, emitiendo resultado JSON determinista"
+        echo "  $0 orchestrate F1                  # Emite el descriptor run_workflow para workflows/sdd_cycle.py"
+        echo "  $0 validate audit_verdict out.json # Valida un payload JSON contra assets/schemas/*.json"
+        echo "  $0 plan \"Nueva función\"            # Inicia nuevo plan y bloquea commits de código"
+        echo "  $0 status                          # Consulta el estado SDD actual"
         exit 1
         ;;
 esac

@@ -31,13 +31,16 @@ All planning, decomposition, state checkpoints, and blind audits must validate a
 | **Start phase** | `<skill-path>/scripts/sdd.sh start F<N> [agent]` | Freezes `plan_hash`, records `Phase-start commit`, sets `sdd_state: execute` |
 | **Verify phase (MD)** | `<skill-path>/scripts/sdd.sh verify F<N>` | Runs `verify-crit.sh` + test runner; sets `sdd_state: verify` on `0` |
 | **Verify phase (JSON)** | `<skill-path>/scripts/sdd.sh verify --json F<N>` | Emits machine-parseable JSON (`0`=pass, `1`=precondition/test fail, `2`=missing CRIT/bypass/open decision) |
+| **Validate schema** | `<skill-path>/scripts/sdd.sh validate <schema> [file\|-]` | Validates JSON against `assets/schemas/<schema>.json` (`0`=valid, `1`=invalid) |
 | **Prepare workflow** | `<skill-path>/scripts/sdd.sh orchestrate F<N> [--plan <path>]` | Emits JSON payload (`ScriptPath`, `Cwd`, `Args`) for `run_workflow` |
 | **Force state** | `<skill-path>/scripts/sdd.sh advance <plan\|execute\|verify>` | Transitions `sdd_state` in `SESSION.md` |
 | **Inspect state** | `<skill-path>/scripts/sdd.sh status` | Prints active state, task, agent, and `plan_hash` integrity |
 | **Reset repo** | `bash <skill-path>/scripts/reset.sh [--dry-run\|--force]` | Removes skill hooks, `SESSION.md`, `plans/`, and `AGENTS.md` block |
 
-## 4. Automated Orchestration (`run_workflow`)
-To execute a full phase deterministically in Antigravity, generate the arguments via `sdd.sh orchestrate F<N>` and invoke the `run_workflow` tool:
+## 4. Phase Execution (Multi-Harness Protocol)
+
+### Mode A — Antigravity Runtime (`run_workflow` tool available)
+Generate the arguments via `<skill-path>/scripts/sdd.sh orchestrate F<N>` and invoke `run_workflow`:
 
 ```python
 run_workflow(
@@ -56,21 +59,14 @@ run_workflow(
 )
 ```
 
-**Stages executed by `workflows/sdd_cycle.py`:**
-1. `phase("Audit Spec")`: Evaluates `PLAN-N.md` against `spec_verification.json` and extracts `task_breakdown.json`.
-2. `phase("Atomic Implementation")`: Runs conflict-free task waves concurrently via `parallel(..., workspace="branch")`.
-3. `phase("Mechanical Gate")`: Invokes `verify-crit.sh --json` and linters via `call_tool("run_command", ...)`.
-4. `phase("Doubt-Driven Audit")`: Runs a persistent blind adversarial agent (`1..3` cycles) stripping author claims (`ARTIFACT + CONTRACT` only) validated against `audit_verdict.json`.
+### Mode B — Standard Agents without `run_workflow` (Claude Code, Cursor, Codex, OpenCode)
+Execute the exact same 4 stages sequentially via CLI and native subagents:
+1. **Audit Spec:** Verify `plans/PLAN-N.md` and validate the JSON output with `<skill-path>/scripts/sdd.sh validate spec_verification -` and `task_breakdown -`.
+2. **Atomic Implementation:** Run `<skill-path>/scripts/sdd.sh start F<N> <agent>`. Implement tasks (`≤ 5` files per task, TDD RED → GREEN with `CRIT-XX` tags, commits prefixed with `feat(F<N>):`).
+3. **Mechanical Gate:** Run `<skill-path>/scripts/sdd.sh verify --json F<N>` (must exit `0` with `"passed": true`).
+4. **Doubt-Driven Audit:** Spawn a fresh-context native subagent passing ONLY `ARTIFACT` (`git diff`) + `CONTRACT` (`PLAN-N.md`), validate its JSON response via `<skill-path>/scripts/sdd.sh validate audit_verdict -` (`1..3` cycles), and halt for human diff review.
 
 ## 5. Reference Index (`references/`)
-Load on demand only when specific protocol rules are needed:
-- `references/bootstrap.md`: Flow A — Repository initialization (`init.sh`) and reset (`reset.sh`).
-- `references/plan-cycle.md`: Flow B — Capability map DAG, ambiguity gate, `PLAN-N.md` authoring, and vertical task slicing (`≤ 5` files).
-- `references/test-driven-development.md`: RED-GREEN-REFACTOR loop, `CRIT-XX` naming, and test double hierarchy.
-- `references/doubt-driven-development.md`: Blind adversarial audit and finding precedence (`contract_misread > actionable > trade_off > noise`).
-- `references/phase-close.md`: Flow C — Standing Definition of Done, C1 phase close, and C2 cycle close.
-- `references/multi-agent.md`: Phase claiming (`start F<N> <agent>`) and branch isolation rules.
-- `references/security-checklist.md`: Threat modeling, AuthN/AuthZ, path/query containment, lockfiles, and AI/LLM boundaries.
 Load on demand only when operating conversationally or auditing security-critical paths:
 - `references/protocol-invariants.md`: Phase 0 capability map DAG, ambiguity gate (≤ 3 questions), TDD double hierarchy (`Real > Fake > Stub > Mock`), Doubt-Driven finding precedence, and C1/C2 closure reports.
 - `references/security-checklist.md`: Threat modeling, AuthN/AuthZ, path/query containment (`realpath`), lockfile hygiene, and AI/LLM boundaries.

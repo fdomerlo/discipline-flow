@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # tests/test-workflow-schemas.sh — Validates JSON schemas, sdd_cycle.py AST,
-# verify-crit.sh --json output, open-decision blocking, and sdd.sh orchestrate payload.
+# verify-crit.sh --json output, open-decision blocking, open-decision blocking, sdd.sh orchestrate, and sdd.sh validate.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -50,7 +50,7 @@ for required_token in [
     assert required_token in src, f"Missing token {required_token} in sdd_cycle.py"
 PYEOF
 
-# 2. Test verify-crit.sh --json and sdd.sh orchestrate in a hermetic git repo
+# 2. Test verify-crit.sh --json, sdd.sh orchestrate, and sdd.sh validate in a hermetic git repo
 D=$(mktemp -d)
 trap 'rm -rf "$D"' EXIT
 cd "$D" || exit 1
@@ -102,7 +102,16 @@ assert d["Args"]["test_cmd"] == "pytest -q", d
 assert d["Args"]["lint_cmd"] == "flake8", d
 ' "$ORCH_JSON" || fail "sdd.sh orchestrate payload invalid: $ORCH_JSON"
 
-# 2c. Failing verify-crit.sh --json on missing CRIT-03 (exit 2)
+# 2c. sdd.sh validate <schema> validates compliant and non-compliant JSON
+VALID_AUDIT='{"passed":true,"cycle":1,"coverage":{"total_criteria":2,"verified_criteria":1,"manual_criteria":1,"missing_criteria":[],"percentage":100},"violations":[],"summary":"Auditoría aprobada sin hallazgos."}'
+printf '%s' "$VALID_AUDIT" | bash "$SDD" validate audit_verdict - >/dev/null || fail "sdd.sh validate should accept valid audit_verdict"
+
+INVALID_AUDIT='{"passed":true,"cycle":5,"coverage":{},"violations":[],"summary":"bad"}'
+if printf '%s' "$INVALID_AUDIT" | bash "$SDD" validate audit_verdict - >/dev/null 2>&1; then
+    fail "sdd.sh validate should reject cycle=5 and incomplete coverage"
+fi
+
+# 2d. Failing verify-crit.sh --json on missing CRIT-03 (exit 2)
 echo "- [ ] CRIT-03: missing test" >> plans/PLAN-1.md
 set +e
 JSON_FAIL=$(TEST_COMMAND=true bash "$VERIFY" --json plans/PLAN-1.md F1)
@@ -118,7 +127,7 @@ assert d["stage"] == "traceability", d
 assert "CRIT-03" in d["missing_crits"], d
 ' "$JSON_FAIL" || fail "verify-crit.sh --json failure payload invalid: $JSON_FAIL"
 
-# 2d. Failing verify-crit.sh --json on unresolved '## DECISIÓN ABIERTA' (exit 2)
+# 2e. Failing verify-crit.sh --json on unresolved '## DECISIÓN ABIERTA' (exit 2)
 printf '\n## DECISIÓN ABIERTA\nPending architectural choice.\n' >> plans/PLAN-1.md
 set +e
 JSON_OPEN=$(TEST_COMMAND=true bash "$VERIFY" --json plans/PLAN-1.md F1)
