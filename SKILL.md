@@ -4,7 +4,7 @@ description: Enforces a deterministic Spec-Driven Development (SDD) workflow via
 license: MIT
 metadata:
   author: fdomerlo
-  version: 2.0.0
+  version: 2.1.0
 ---
 
 # Operational Contract: Programmatic SDD Gatekeeper (Discipline-Flow)
